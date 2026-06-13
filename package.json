@@ -6,7 +6,9 @@
   "description": "Private nano-payment agent — Dynamic + Unlink + Circle (ETHGlobal NY 2026)",
   "scripts": {
     "derisk:unlink": "tsx scripts/derisk-unlink.ts",
-    "inspect:unlink": "tsx scripts/inspect-unlink-sdk.ts"
+    "mint:tokens": "tsx scripts/mint-tokens.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@unlink-xyz/sdk": "canary",
@@ -16,6 +18,7 @@
   "devDependencies": {
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "@types/node": "^22.5.0"
+    "@types/node": "^22.5.0",
+    "vitest": "^2.1.0"
   }
 }
