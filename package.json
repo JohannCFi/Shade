@@ -11,6 +11,7 @@
     "derisk:unlink": "tsx scripts/derisk-unlink.ts",
     "mint:tokens": "tsx scripts/mint-tokens.ts",
     "circle:pay": "tsx scripts/circle-pay.ts",
+    "agent:run": "tsx scripts/agent-run.ts",
     "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
