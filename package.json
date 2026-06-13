@@ -12,6 +12,7 @@
     "mint:tokens": "tsx scripts/mint-tokens.ts",
     "circle:pay": "tsx scripts/circle-pay.ts",
     "agent:run": "tsx scripts/agent-run.ts",
+    "verify:flow": "tsx scripts/verify-flow.ts",
     "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
