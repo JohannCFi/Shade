@@ -3,17 +3,22 @@
  * route handlers — reads env directly with fallbacks (does NOT import the strict
  * Unlink config, which throws on missing secrets).
  */
+import { resolveChain } from "../chain/chains.js";
 
-/** CAIP-2 id for base-sepolia. */
-export const NETWORK = "eip155:84532";
+const chain = resolveChain(process.env.UNLINK_ENVIRONMENT);
 
-/** ERC-20 asset paid per call (the ULNKm test token), with a demo fallback. */
+/** CAIP-2 id of the active chain (Arc Testnet by default). */
+export const NETWORK = chain.caip2;
+
+/** ERC-20 asset paid per call. Defaults to Arc USDC. */
 export const ASSET =
   process.env.UNLINK_TEST_TOKEN?.trim() ||
-  "0x7501de8ea37a21e20e6e65947d2ecab0e9f061a7";
+  "0x3600000000000000000000000000000000000000";
 
-/** Price per oracle call, in the asset's smallest unit (0.001 token @ 18 dec). */
-export const PRICE_UNITS = "1000000000000000";
+const TOKEN_DECIMALS = Number(process.env.UNLINK_TOKEN_DECIMALS ?? "6");
+
+/** Price per oracle call (0.001 token) in the asset's smallest unit. */
+export const PRICE_UNITS = (10n ** BigInt(Math.max(TOKEN_DECIMALS - 3, 0))).toString();
 
 /** Distinct (valid) seller addresses, so the spy can tell the oracles apart. */
 export const ETH_ORACLE_PAYTO = "0x1111111111111111111111111111111111111111";

@@ -9,9 +9,10 @@ import {
 } from "@unlink-xyz/sdk/client";
 import { createUnlinkAdmin, type UnlinkAdmin } from "@unlink-xyz/sdk/admin";
 import { createPublicClient, createWalletClient, http } from "viem";
-import { baseSepolia } from "viem/chains";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { config } from "./config.js";
+
+const chain = config.chain.viemChain;
 
 /**
  * Builds a fully self-contained Unlink client for a single Node process.
@@ -37,11 +38,11 @@ export function createNodeUnlinkContext(accountIndex = 0): NodeUnlinkContext {
 
   const walletClient = createWalletClient({
     account: evmSigner,
-    chain: baseSepolia,
+    chain,
     transport: http(config.rpcUrl),
   });
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain,
     transport: http(config.rpcUrl),
   });
   // The SDK bundles its own viem types, so our viem's WalletClient/PublicClient
