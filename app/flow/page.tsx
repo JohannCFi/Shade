@@ -33,10 +33,12 @@ export default function FlowPage() {
 
   const say = (m: string) => setLog((l) => [...l, m]);
 
-  async function refreshBudget(c: UnlinkClient) {
+  async function refreshBudget(c: UnlinkClient): Promise<string> {
     const { balances } = await c.getBalances({ token: BROWSER_TOKEN });
     const b = balances.find((x) => x.token.toLowerCase() === BROWSER_TOKEN.toLowerCase());
-    setBudget(b ? fmtToken(b.amount) : "0");
+    const v = b ? fmtToken(b.amount) : "0";
+    setBudget(v);
+    return v;
   }
 
   async function onDeploy() {
@@ -62,8 +64,8 @@ export default function FlowPage() {
       say(`Funding ${amount} USDC into the pool (private)…`);
       const tx = await client.depositWithApproval({ token: BROWSER_TOKEN, amount: toToken(amount) });
       await tx.wait();
-      await refreshBudget(client);
-      say(`Funded ✓ — budget now ${budget} USDC`);
+      const newBudget = await refreshBudget(client);
+      say(`Funded ✓ — budget now ${newBudget} USDC`);
     } catch (e) { say(`Fund failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
   }
