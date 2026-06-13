@@ -14,6 +14,7 @@
     "agent:run": "tsx scripts/agent-run.ts",
     "verify:flow": "tsx scripts/verify-flow.ts",
     "check:activity": "tsx scripts/check-activity.ts",
+    "mcp": "tsx scripts/mcp-server.ts",
     "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -22,6 +23,7 @@
     "@circle-fin/x402-batching": "^3.0.4",
     "@dynamic-labs/ethereum": "^4.88.5",
     "@dynamic-labs/sdk-react-core": "^4.88.5",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@unlink-xyz/sdk": "canary",
     "@x402/core": "^2.15.0",
     "@x402/evm": "^2.15.0",
@@ -29,7 +31,8 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "viem": "^2.21.0"
+    "viem": "^2.21.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
