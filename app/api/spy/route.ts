@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { arcTestnet } from "viem/chains";
 import { readObservablePayments } from "@/src/spy/chain-reader";
 import { reconstruct } from "@/src/spy/reconstruct";
 import { deriveSpyAddresses, oracleLabels } from "@/src/spy/agents";
@@ -34,6 +35,24 @@ export async function GET(request: Request): Promise<NextResponse> {
     return p.from.toLowerCase() === a && oracleSet.has(p.to.toLowerCase());
   });
 
-  const report = reconstruct({ agentAddress: address, payments: filtered, knownOracles: oracleLabels(addrs) });
-  return NextResponse.json({ rail, address, report });
+  const labels = oracleLabels(addrs);
+  const report = reconstruct({ agentAddress: address, payments: filtered, knownOracles: labels });
+
+  // Real on-chain proof: the actual Transfer txs the spy read, linked to ArcScan.
+  const explorerBase = arcTestnet.blockExplorers?.default?.url ?? "https://testnet.arcscan.app";
+  const txs = filtered
+    .filter((p) => p.txHash)
+    .map((p) => {
+      const out = p.from.toLowerCase() === address.toLowerCase();
+      const counterparty = (out ? p.to : p.from).toLowerCase();
+      return {
+        hash: p.txHash!,
+        url: `${explorerBase}/tx/${p.txHash}`,
+        kind: out ? ("out" as const) : ("in" as const),
+        label: out ? labels[counterparty] ?? "oracle" : "funding",
+        amount: p.amount,
+      };
+    });
+
+  return NextResponse.json({ rail, address, report, txs, explorerBase });
 }

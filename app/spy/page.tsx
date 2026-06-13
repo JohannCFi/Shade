@@ -12,23 +12,25 @@ interface SpyReport {
   totalSpent: string;
   inferredStrategy: string | null;
 }
+interface SpyTx { hash: string; url: string; kind: "out" | "in"; label: string; amount: string }
+interface RailData { report: SpyReport | null; txs: SpyTx[] }
 
 const usd = (atomic: string) => `${(Number(atomic) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`;
 const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
-async function fetchRail(rail: "transparent" | "unlink"): Promise<SpyReport | null> {
+async function fetchRail(rail: "transparent" | "unlink"): Promise<RailData> {
   try {
     const r = await fetch(`/api/spy?rail=${rail}`, { cache: "no-store" });
     const j = await r.json();
-    return j.report ?? null;
+    return { report: j.report ?? null, txs: j.txs ?? [] };
   } catch {
-    return null;
+    return { report: null, txs: [] };
   }
 }
 
 export default function SpyPage() {
-  const [left, setLeft] = useState<SpyReport | null>(null);
-  const [right, setRight] = useState<SpyReport | null>(null);
+  const [left, setLeft] = useState<RailData>({ report: null, txs: [] });
+  const [right, setRight] = useState<RailData>({ report: null, txs: [] });
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<string>("");
 
@@ -54,7 +56,7 @@ export default function SpyPage() {
       for (let i = 0; i < 8; i++) {
         const l = await fetchRail("transparent");
         setLeft(l);
-        if (l?.readable && l.oracles.length >= 2) break;
+        if (l.report?.readable && l.report.oracles.length >= 2) break;
         await new Promise((r) => setTimeout(r, 4000));
       }
       await refresh();
@@ -98,13 +100,15 @@ export default function SpyPage() {
             tone="exposed"
             rail="x402, transparent"
             subtitle="bare x402 nano-payments"
-            report={left}
+            report={left.report}
+            txs={left.txs}
           />
           <SpyPanel
             tone="private"
             rail="Unlink, private"
             subtitle="same agent, shielded"
-            report={right}
+            report={right.report}
+            txs={right.txs}
           />
         </div>
       </div>
@@ -112,11 +116,12 @@ export default function SpyPage() {
   );
 }
 
-function SpyPanel({ tone, rail, subtitle, report }: {
+function SpyPanel({ tone, rail, subtitle, report, txs }: {
   tone: "exposed" | "private";
   rail: string;
   subtitle: string;
   report: SpyReport | null;
+  txs: SpyTx[];
 }) {
   const exposed = tone === "exposed";
   const readable = Boolean(report?.readable);
@@ -150,6 +155,32 @@ function SpyPanel({ tone, rail, subtitle, report }: {
         />
         <Row label="Budget spent" value={readable ? usd(report!.totalSpent) : "—"} hot={exposed && readable} />
         <Row label="Strategy" value={readable ? `"${report!.inferredStrategy}"` : "▓▒░ unreadable ░▒▓"} hot={exposed && readable} />
+
+        {exposed && readable && txs.length > 0 && (
+          <div className="mt-5 border-t border-[var(--line)] pt-4">
+            <p className="eyebrow mb-3">on-chain proof · arcscan ↗</p>
+            <ul className="space-y-0.5">
+              {txs.slice(0, 8).map((t, i) => (
+                <li key={`${t.hash}-${i}`}>
+                  <a
+                    href={t.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-3 rounded px-1.5 py-1 font-mono text-xs text-faint transition hover:bg-[var(--bg)] hover:text-ink"
+                  >
+                    <span className="uppercase tracking-wider">
+                      {t.kind === "in" ? "funding" : t.label}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      {short(t.hash)}
+                      <span className="text-[0.7rem] opacity-70">↗</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {!readable && (
           <p className="mt-5 font-mono text-xs text-faint">
