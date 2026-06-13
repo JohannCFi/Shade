@@ -61,3 +61,31 @@ export function decodePaymentHeader(header: string): PaymentPayload {
   const json = Buffer.from(header, "base64").toString("utf8");
   return JSON.parse(json) as PaymentPayload;
 }
+
+/**
+ * Proof that a call was paid PRIVATELY via Unlink rather than a transparent
+ * EIP-3009 transfer. Same oracle, different rail: the seller is paid inside the
+ * Unlink privacy pool, so no agent→seller edge is visible on-chain.
+ */
+export interface UnlinkPaymentProof {
+  scheme: "unlink";
+  network: string;
+  token: string;
+  amount: string;
+  /** Seller's Unlink (bech32m) address that received the private transfer. */
+  to: string;
+  /** Unlink transfer id (engine-scoped reference). */
+  txId: string;
+}
+
+export function encodeUnlinkProof(proof: UnlinkPaymentProof): string {
+  return Buffer.from(JSON.stringify(proof), "utf8").toString("base64");
+}
+
+/** Decode any X-PAYMENT header just far enough to read its `scheme`. */
+export function decodeHeaderScheme(
+  header: string,
+): { scheme?: string } & Record<string, unknown> {
+  const json = Buffer.from(header, "base64").toString("utf8");
+  return JSON.parse(json);
+}
