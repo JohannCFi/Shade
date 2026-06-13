@@ -3,6 +3,7 @@ import {
   createUnlinkAuthRoutes,
   type UnlinkAuthRouteHandlers,
 } from "@unlink-xyz/sdk/admin";
+import { verifyDynamicToken } from "./dynamic-auth.js";
 
 /**
  * Server-only Unlink auth routes for the browser flow.
@@ -35,8 +36,10 @@ export function getUnlinkAuthRoutes() {
   cached = createUnlinkAuthRoutes<ShadeSession>({
     admin,
     authenticate: async (request) => {
-      // TODO(étape 3): verify the Dynamic session JWT from the Authorization
-      // header and resolve the real app user. Stubbed for scaffolding.
+      // Real per-user auth: verify the Dynamic session JWT (Authorization: Bearer).
+      const verified = await verifyDynamicToken(request.headers.get("authorization"));
+      if (verified) return verified;
+      // Demo fallback when no token is presented. PROD: reject instead (throw).
       const userId = request.headers.get("x-shade-user") ?? "demo-user";
       return { userId };
     },
