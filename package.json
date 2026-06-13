@@ -17,6 +17,7 @@
     "mcp": "tsx scripts/mcp-server.ts",
     "spy:demo": "tsx scripts/spy-demo.ts",
     "spy:live": "tsx scripts/spy-live.ts",
+    "example:bot": "tsx scripts/example-bot.ts",
     "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -30,6 +31,7 @@
     "@x402/core": "^2.15.0",
     "@x402/evm": "^2.15.0",
     "dotenv": "^16.4.5",
+    "jose": "^6.2.3",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
