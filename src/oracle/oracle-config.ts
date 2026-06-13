@@ -15,9 +15,9 @@ export const ASSET =
 /** Price per oracle call, in the asset's smallest unit (0.001 token @ 18 dec). */
 export const PRICE_UNITS = "1000000000000000";
 
-/** Distinct seller addresses, so the spy can tell the two oracles apart. */
-export const ETH_ORACLE_PAYTO = "0xE7100rac1e0000000000000000000000000000a1";
-export const BTC_ORACLE_PAYTO = "0xB7c510Na100000000000000000000000000000a2";
+/** Distinct (valid) seller addresses, so the spy can tell the oracles apart. */
+export const ETH_ORACLE_PAYTO = "0x1111111111111111111111111111111111111111";
+export const BTC_ORACLE_PAYTO = "0x2222222222222222222222222222222222222222";
 
 /**
  * Stateless routes derive a tick from wall-clock time (one new quote per
