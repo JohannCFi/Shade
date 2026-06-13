@@ -11,6 +11,13 @@ export default function Home() {
         budget and funder to anyone reading the chain.
       </p>
 
+      <a
+        href="/flow"
+        className="mt-6 inline-block rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white hover:bg-violet-500"
+      >
+        Launch the owner flow →
+      </a>
+
       <div className="mt-10 grid gap-4 sm:grid-cols-3 text-sm">
         <Pill label="Dynamic" sub="wallet & onboarding" />
         <Pill label="Unlink" sub="private accounts" />
