@@ -16,6 +16,7 @@
     "check:activity": "tsx scripts/check-activity.ts",
     "mcp": "tsx scripts/mcp-server.ts",
     "spy:demo": "tsx scripts/spy-demo.ts",
+    "spy:live": "tsx scripts/spy-live.ts",
     "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
