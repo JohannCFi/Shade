@@ -14,7 +14,7 @@ interface SpyReport {
 }
 
 const usd = (atomic: string) => `${(Number(atomic) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`;
-const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—");
+const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
 async function fetchRail(rail: "transparent" | "unlink"): Promise<SpyReport | null> {
   try {
@@ -58,7 +58,7 @@ export default function SpyPage() {
         await new Promise((r) => setTimeout(r, 4000));
       }
       await refresh();
-      setStatus("Done — the left was reconstructed from the chain; the right stayed dark.");
+      setStatus("Done, the left was reconstructed from the chain; the right stayed dark.");
     } catch (e) {
       setStatus(`Failed: ${(e as Error).message}`);
     } finally {
@@ -96,13 +96,13 @@ export default function SpyPage() {
         <div className="mt-12 grid gap-5 md:grid-cols-2">
           <SpyPanel
             tone="exposed"
-            rail="x402 — transparent"
+            rail="x402, transparent"
             subtitle="bare x402 nano-payments"
             report={left}
           />
           <SpyPanel
             tone="private"
-            rail="Unlink — private"
+            rail="Unlink, private"
             subtitle="same agent, shielded"
             report={right}
           />
@@ -145,7 +145,7 @@ function SpyPanel({ tone, rail, subtitle, report }: {
         <Row label="Funder" value={readable ? short(report!.funder) : "🚫"} hot={exposed && readable} />
         <Row
           label="Oracles queried"
-          value={readable ? (report!.oracles.map((o) => `${o.label ?? short(o.oracle)} ×${o.calls}`).join("  ·  ") || "—") : "🚫"}
+          value={readable ? (report!.oracles.map((o) => `${o.label ?? short(o.oracle)} ×${o.calls}`).join("  ·  ") || "-") : "🚫"}
           hot={exposed && readable}
         />
         <Row label="Budget spent" value={readable ? usd(report!.totalSpent) : "🚫"} hot={exposed && readable} />
