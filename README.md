@@ -1,36 +1,60 @@
 # Shade — Private Nano-Payment Agent
 
 > ETHGlobal New York 2026 — prize **"Best Private Nano Payment App"** (sponsor Unlink).
-> Combine **Dynamic** (onboarding/wallet) + **Unlink** (comptes privés) + **Circle Nanopayments** (settlement x402 v2 / EIP-3009).
+> Combines **Dynamic** (onboarding/wallet) + **Unlink** (private accounts) + **Circle Nanopayments** (x402 v2 / EIP-3009 settlement). Runs on **Arc Testnet**.
 
 ## Pitch
 
-Un agent autonome dont le **financement** (par son owner) et les **dépenses** (par appel
-d'API) sont totalement illisibles onchain — là où x402 nu expose la stratégie de l'agent,
-son budget et son financeur à n'importe quel concurrent qui lit la chain.
+An autonomous agent whose **funding** (by its owner) and **spending** (per API call)
+are completely unreadable on-chain — where bare x402 exposes the agent's strategy,
+its budget and its funder to any competitor reading the chain.
 
-## Démo (split-screen "vu par un concurrent")
+## Demo (split-screen "as a competitor sees it")
 
-- **Gauche — x402 nu (transparent)** : un panneau "espion" reconstruit en live la stratégie
-  de l'agent (quels oracles, à quelle fréquence), son budget et le wallet qui l'a financé.
-- **Droite — même agent sur Unlink** : le panneau espion n'affiche que du bruit.
+- **Left — bare x402 (transparent)**: a "spy" panel reconstructs the agent's strategy
+  (which oracles, how often), its budget, and the wallet that funded it.
+- **Right — same agent on Unlink**: the spy panel shows only noise.
 
-Le contraste visuel **est** le pitch.
+The visual contrast **is** the pitch. See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Stack
 
-- Next.js (front + routes API), déployable Vercel
-- `@unlink-xyz/sdk` (comptes privés, base-sepolia)
-- Dynamic SDK (onboarding owner)
-- Circle Nanopayments (settlement x402 v2, EIP-3009)
+- Next.js (App Router) — front + API routes
+- `@unlink-xyz/sdk` — private accounts (Arc Testnet, USDC)
+- Dynamic SDK — owner onboarding / embedded wallet
+- `@circle-fin/x402-batching` — Circle Nanopayments settlement (x402 v2, EIP-3009)
+- `@modelcontextprotocol/sdk` — MCP server ("plug in any agent")
 
-## Ordre de build (anti-risque)
+## Status (live on Arc Testnet)
 
-1. **Dérisquer Unlink** : hello-world `deposit → transfer → withdraw` sur base-sepolia. ⬅️ en cours
-2. Boucle agent + endpoints x402 "oracle" (mockés) + settlement Circle
-3. Onboarding Dynamic
-4. **Split-screen espion** (le plus soigné — c'est lui qui gagne)
+| Piece | Status |
+|------|--------|
+| Unlink derisk `deposit → transfer → withdraw` | ✅ live |
+| x402 oracle endpoints | ✅ |
+| Agent loop + strategy | ✅ |
+| Payment channels (transparent EIP-3009 / Unlink) | ✅ |
+| Circle Nanopayments settlement | ✅ live |
+| Owner flow (Connect → Deploy → Fund → Run) | ✅ live in browser |
+| MCP server ("plug in your agent") | ✅ live |
+| Spy indexer (reconstruct + chain reader) | ✅ (logic) |
+| Split-screen UI / design | 🔵 in progress |
 
-## Statut
+## Scripts
 
-🚧 En cours de build (hackathon). Voir les PRs pour le détail des étapes.
+```bash
+npm run dev              # Next.js dev server (the app + API routes)
+npm test                 # unit tests (vitest)
+
+npm run derisk:unlink    # Unlink deposit→transfer→withdraw on Arc
+npm run circle:pay       # one live Circle nanopayment (server must be up)
+npm run agent:run -- --rail both --ticks 2 --limit 0.05   # live agent, both rails
+npm run mcp              # start the Shade MCP server (stdio)
+npx tsx scripts/mcp-test.ts     # end-to-end MCP test
+npm run spy:demo         # spy engine preview (the split-screen contrast, headless)
+npm run check:activity   # verify private payments via the Unlink engine
+```
+
+## Config
+
+Copy `.env.example` → `.env` and fill in: `UNLINK_API_KEY`, `UNLINK_ENVIRONMENT=arc-testnet`,
+`WALLET_MNEMONIC`, `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID`. See `.env.example` for the full list.
