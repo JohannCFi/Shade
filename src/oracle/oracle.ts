@@ -14,7 +14,20 @@ export type OracleResponse =
   | { status: 402; body: PaymentRequiredBody }
   | { status: 200; value: OracleValue };
 
-export class InProcessOracle {
+/**
+ * What the agent loop needs from an oracle: a resource id and a pay-gated read.
+ * Implemented in-process (tests/demo) and over HTTP (real x402 endpoints).
+ */
+export interface OracleReader {
+  readonly resource: string;
+  read(tick: number, header?: string): OracleResponse | Promise<OracleResponse>;
+}
+
+export class InProcessOracle implements OracleReader {
+  get resource(): string {
+    return this.paywall.requirement().accepts[0].resource;
+  }
+
   constructor(
     readonly paywall: Paywall,
     private readonly valueAt: (tick: number) => OracleValue,
