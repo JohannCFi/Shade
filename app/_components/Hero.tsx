@@ -15,6 +15,12 @@ export function Nav() {
         </div>
         <div className="flex items-center gap-2">
           <a
+            href="/spy"
+            className="hidden rounded-lg px-3.5 py-1.5 text-sm text-muted transition hover:text-ink sm:inline-block"
+          >
+            Live demo
+          </a>
+          <a
             href="/flow"
             className="rounded-lg bg-ink px-3.5 py-1.5 text-sm font-medium text-bg transition hover:opacity-90"
           >
