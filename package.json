@@ -10,12 +10,17 @@
     "start": "next start",
     "derisk:unlink": "tsx scripts/derisk-unlink.ts",
     "mint:tokens": "tsx scripts/mint-tokens.ts",
+    "circle:pay": "tsx scripts/circle-pay.ts",
+    "agent:run": "tsx scripts/agent-run.ts",
     "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@circle-fin/x402-batching": "^3.0.4",
     "@unlink-xyz/sdk": "canary",
+    "@x402/core": "^2.15.0",
+    "@x402/evm": "^2.15.0",
     "dotenv": "^16.4.5",
     "next": "^15.1.0",
     "react": "^19.0.0",

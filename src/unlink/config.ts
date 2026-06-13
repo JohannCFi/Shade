@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolveChain } from "../chain/chains.js";
 
 /**
  * Centralised, validated configuration for the Unlink integration.
@@ -21,21 +22,26 @@ function optional(name: string, fallback: string): string {
   return value && value.trim() !== "" ? value.trim() : fallback;
 }
 
+const environment = optional("UNLINK_ENVIRONMENT", "arc-testnet");
+const chain = resolveChain(environment);
+
 export const config = {
   /** Unlink hosted environment (resolves to the Engine URL). */
-  environment: optional("UNLINK_ENVIRONMENT", "base-sepolia"),
+  environment,
+  /** Resolved chain info (viem chain, chainId, CAIP-2, Circle chain name). */
+  chain,
   /** Server-side admin API key (dashboard.unlink.xyz project settings). */
   apiKey: required("UNLINK_API_KEY"),
   /** ERC-20 test token address configured for the environment. */
   testToken: required("UNLINK_TEST_TOKEN"),
-  /** Decimals of the test token (USDC test = 6). */
+  /** Decimals of the test token (USDC = 6, base-sepolia ULNKm = 18). */
   tokenDecimals: Number(optional("UNLINK_TOKEN_DECIMALS", "6")),
   /** BIP-39 mnemonic — derives BOTH the Unlink account and the EVM wallet. */
   mnemonic: required("WALLET_MNEMONIC"),
   /** Optional EVM private key override (used only for the onchain wallet). */
   privateKey: process.env.WALLET_PRIVATE_KEY?.trim() || undefined,
-  /** base-sepolia RPC endpoint. */
-  rpcUrl: optional("BASE_SEPOLIA_RPC", "https://sepolia.base.org"),
+  /** RPC endpoint (RPC_URL override, else the chain's default). */
+  rpcUrl: process.env.RPC_URL?.trim() || optional("BASE_SEPOLIA_RPC", chain.defaultRpc),
 } as const;
 
 /** Convert a human amount (e.g. "0.25") to base units as a decimal string. */
