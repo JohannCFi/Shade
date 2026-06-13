@@ -15,6 +15,10 @@ out/
 dist/
 build/
 
+# Next.js generated / incremental
+next-env.d.ts
+*.tsbuildinfo
+
 # Logs
 *.log
 npm-debug.log*

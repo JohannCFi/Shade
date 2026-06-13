@@ -1,5 +1,5 @@
 import { decide, type Action, type BtcSignal } from "./strategy.js";
-import type { InProcessOracle } from "../oracle/oracle.js";
+import type { OracleReader } from "../oracle/oracle.js";
 import type { PaymentChannel, PaymentReceipt } from "../payment/channel.js";
 
 /**
@@ -25,17 +25,17 @@ export interface AgentRunResult {
 
 /** Pay-then-read an oracle: handle the 402, pay via the channel, retry. */
 async function paidRead(
-  oracle: InProcessOracle,
+  oracle: OracleReader,
   channel: PaymentChannel,
   tick: number,
 ): Promise<{ value: number | BtcSignal; receipt: PaymentReceipt }> {
-  const first = oracle.read(tick);
+  const first = await oracle.read(tick);
   if (first.status === 200) {
     throw new Error("oracle returned data without requiring payment");
   }
   const req = first.body.accepts[0];
   const receipt = await channel.pay(req);
-  const second = oracle.read(tick, receipt.header);
+  const second = await oracle.read(tick, receipt.header);
   if (second.status !== 200) {
     throw new Error(`oracle rejected payment for ${req.resource}`);
   }
@@ -43,8 +43,8 @@ async function paidRead(
 }
 
 export interface RunAgentOptions {
-  ethOracle: InProcessOracle;
-  btcOracle: InProcessOracle;
+  ethOracle: OracleReader;
+  btcOracle: OracleReader;
   channel: PaymentChannel;
   ticks: number;
 }

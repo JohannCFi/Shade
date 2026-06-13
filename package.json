@@ -5,20 +5,31 @@
   "type": "module",
   "description": "Private nano-payment agent — Dynamic + Unlink + Circle (ETHGlobal NY 2026)",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "derisk:unlink": "tsx scripts/derisk-unlink.ts",
     "mint:tokens": "tsx scripts/mint-tokens.ts",
+    "agent:demo": "tsx scripts/demo-agent.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@unlink-xyz/sdk": "canary",
     "dotenv": "^16.4.5",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "viem": "^2.21.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.5.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "@types/node": "^22.5.0",
     "vitest": "^2.1.0"
   }
 }
