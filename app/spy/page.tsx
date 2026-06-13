@@ -141,15 +141,15 @@ function SpyPanel({ tone, rail, subtitle, report }: {
       </div>
 
       <div className="p-5">
-        <p className="eyebrow mb-4">🕵️ reconstructed by a competitor</p>
-        <Row label="Funder" value={readable ? short(report!.funder) : "🚫"} hot={exposed && readable} />
+        <p className="eyebrow mb-4">reconstructed by a competitor</p>
+        <Row label="Funder" value={readable ? short(report!.funder) : "∅ no link to owner"} hot={exposed && readable} />
         <Row
           label="Oracles queried"
-          value={readable ? (report!.oracles.map((o) => `${o.label ?? short(o.oracle)} ×${o.calls}`).join("  ·  ") || "-") : "🚫"}
+          value={readable ? (report!.oracles.map((o) => `${o.label ?? short(o.oracle)} ×${o.calls}`).join("  ·  ") || "-") : "▓░▒▓ noise ▒░▓"}
           hot={exposed && readable}
         />
-        <Row label="Budget spent" value={readable ? usd(report!.totalSpent) : "🚫"} hot={exposed && readable} />
-        <Row label="Strategy" value={readable ? `"${report!.inferredStrategy}"` : "🚫 unreadable"} hot={exposed && readable} />
+        <Row label="Budget spent" value={readable ? usd(report!.totalSpent) : "—"} hot={exposed && readable} />
+        <Row label="Strategy" value={readable ? `"${report!.inferredStrategy}"` : "▓▒░ unreadable ░▒▓"} hot={exposed && readable} />
 
         {!readable && (
           <p className="mt-5 font-mono text-xs text-faint">
