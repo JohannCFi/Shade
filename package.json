@@ -6,6 +6,7 @@
   "description": "Private nano-payment agent — Dynamic + Unlink + Circle (ETHGlobal NY 2026)",
   "scripts": {
     "derisk:unlink": "tsx scripts/derisk-unlink.ts",
+    "mint:tokens": "tsx scripts/mint-tokens.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
