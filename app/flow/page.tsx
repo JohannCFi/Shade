@@ -51,7 +51,7 @@ export default function FlowPage() {
       await c.ensureRegistered();
       const addr = await c.getAddress();
       setClient(c); setUnlinkAddr(addr);
-      say(`Agent deployed — Unlink account ${addr.slice(0, 14)}…`);
+      say(`Agent deployed, Unlink account ${addr.slice(0, 14)}…`);
       await refreshBudget(c);
     } catch (e) { say(`Deploy failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
@@ -65,7 +65,7 @@ export default function FlowPage() {
       const tx = await client.depositWithApproval({ token: BROWSER_TOKEN, amount: toToken(amount) });
       await tx.wait();
       const newBudget = await refreshBudget(client);
-      say(`Funded ✓ — budget now ${newBudget} USDC`);
+      say(`Funded ✓, budget now ${newBudget} USDC`);
     } catch (e) { say(`Fund failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
   }
@@ -87,7 +87,7 @@ export default function FlowPage() {
         say(`t${tick}: paid 2 oracles privately · ETH=${ethPrice} BTC=${btcSignal} → ${action}`);
       }
       await refreshBudget(client);
-      say("Run complete — payments left no on-chain agent→oracle trail.");
+      say("Run complete, payments left no on-chain agent→oracle trail.");
     } catch (e) { say(`Run failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
   }
@@ -143,7 +143,7 @@ export default function FlowPage() {
             )}
           </Step>
 
-          <Step n={3} title="Fund agent — private" done={Number(budget) > 0} disabled={!client}>
+          <Step n={3} title="Fund agent, private" done={Number(budget) > 0} disabled={!client}>
             <div className="flex flex-wrap items-center gap-2.5">
               <input
                 className="input"
@@ -165,7 +165,7 @@ export default function FlowPage() {
             <button className="btn" disabled={!client || busy !== null || Number(budget) <= 0} onClick={onRun}>
               {busy === "run" ? "Running…" : "Run agent"}
             </button>
-            <p className="hint">Pays two oracles privately each tick — no agent→oracle trail.</p>
+            <p className="hint">Pays two oracles privately each tick, no agent→oracle trail.</p>
           </Step>
         </div>
 
@@ -183,7 +183,7 @@ export default function FlowPage() {
         )}
 
         <p className="mt-10 text-center font-mono text-[0.7rem] text-faint">
-          Same orders, same settlement — zero footprint.
+          Same orders, same settlement, zero footprint.
         </p>
       </div>
 

@@ -54,12 +54,12 @@ export function Sections() {
         <Step index="02" title="Bare x402 is a confession" tone="leak" visual={<SpyPanel exposed />}>
           Every transparent payment is a footprint. A competitor reading the
           chain rebuilds your <em>strategy</em>, your <em>budget</em>, and the
-          wallet that <em>funds</em> you — for free.
+          wallet that <em>funds</em> you, for free.
         </Step>
 
         <Step index="03" title="Shade casts no shadow" tone="glow" visual={<SpyPanel exposed={false} />}>
           Same agent, routed through Unlink private accounts. The funding and the
-          spending settle for real — but the spy panel sees only noise.
+          spending settle for real, but the spy panel sees only noise.
         </Step>
       </div>
 
@@ -79,7 +79,7 @@ export function Sections() {
         </h2>
         <p className="reveal reveal-delay-1 relative mx-auto mt-7 max-w-xl text-[1.05rem] leading-relaxed text-muted">
           Shade is an autonomous agent whose funding and spending are unreadable
-          on-chain — where bare x402 leaks your strategy, your budget, and your
+          on-chain, where bare x402 leaks your strategy, your budget, and your
           backer to anyone watching the chain.
         </p>
       </section>
@@ -186,7 +186,7 @@ function SpyPanel({ exposed }: { exposed: boolean }) {
       ]
     : [
         ["strategy", "▓▒░ unreadable ░▒▓"],
-        ["budget", "—"],
+        ["budget", "-"],
         ["funder", "∅ no link to owner"],
         ["calls/day", "▓░▒▓ noise ▒░▓"],
       ];

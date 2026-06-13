@@ -9,9 +9,9 @@ export function Nav() {
           <span className="text-[0.95rem] font-semibold tracking-tight">Shade</span>
         </a>
         <div className="hidden items-center gap-8 text-sm text-muted md:flex">
-          <a href="#how" className="transition hover:text-ink">How it works</a>
-          <a href="#chain" className="transition hover:text-ink">The problem</a>
-          <a href="#rails" className="transition hover:text-ink">Rails</a>
+          <a href="/#how" className="transition hover:text-ink">How it works</a>
+          <a href="/#chain" className="transition hover:text-ink">The problem</a>
+          <a href="/#rails" className="transition hover:text-ink">Rails</a>
         </div>
         <div className="flex items-center gap-2">
           <a
@@ -54,7 +54,7 @@ export function Hero() {
           className="rise mx-auto mt-6 max-w-xl font-mono text-[0.95rem] text-muted"
           style={{ animationDelay: "0.1s" }}
         >
-          Same orders, same settlement —{" "}
+          Same orders, same settlement,{" "}
           <span className="text-ink">zero footprint.</span>
         </p>
 
@@ -70,7 +70,7 @@ export function Hero() {
             <span className="transition group-hover:translate-x-0.5">→</span>
           </a>
           <a
-            href="#how"
+            href="/#how"
             className="rounded-lg border border-[var(--line-2)] px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-[var(--bg-panel)]"
           >
             See how it works
@@ -114,7 +114,7 @@ function ExposedLedger() {
         </table>
       </div>
       <p className="mt-4 text-center font-mono text-xs text-faint">
-        every line above is public. strategy, budget and funder — reconstructable by anyone.
+        every line above is public. strategy, budget and funder, reconstructable by anyone.
       </p>
     </div>
   );

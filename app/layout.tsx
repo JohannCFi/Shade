@@ -16,7 +16,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shade — Be Invisible",
+  title: "Shade, Be Invisible",
   description:
     "An autonomous agent whose funding and spending are unreadable on-chain. Dynamic + Unlink + Circle.",
 };
