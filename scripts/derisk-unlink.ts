@@ -53,15 +53,26 @@ async function main() {
   await owner.admin.users.register(await agentAccount.getRegistrationPayload());
   console.log(`agent Unlink addr  = ${agentAddr} (registered ✓)`);
 
-  // --- 2. Faucet test tokens into the owner's EVM wallet ---
-  log("2", "Requesting test tokens to owner EVM wallet…");
+  // --- 2. Faucet test tokens (non-fatal: the wallet may already be funded) ---
+  log("2", "Requesting test tokens…");
+  let faucetWorked = false;
   try {
     const mint = await owner.client.faucet.requestTestTokens({ token: config.testToken });
-    console.log(`   faucet tx_hash = ${mint.tx_hash}`);
+    console.log(`   requestTestTokens tx_hash = ${mint.tx_hash}`);
+    faucetWorked = true;
   } catch (err) {
-    console.warn(`   requestTestTokens failed (${(err as Error).message}). Falling back to requestPrivateTokens…`);
-    const priv = await owner.client.faucet.requestPrivateTokens({ token: config.testToken });
-    console.log(`   private faucet tx_id = ${priv.tx_id} (status ${priv.status})`);
+    console.warn(`   requestTestTokens failed: ${(err as Error).message}`);
+  }
+  if (!faucetWorked) {
+    try {
+      const priv = await owner.client.faucet.requestPrivateTokens({ token: config.testToken });
+      console.log(`   requestPrivateTokens tx_id = ${priv.tx_id} (status ${priv.status})`);
+      faucetWorked = true;
+    } catch (err) {
+      console.warn(`   requestPrivateTokens failed: ${(err as Error).message}`);
+      console.warn("   → Faucet unavailable for this token. The spike will rely on whatever");
+      console.warn(`     balance the wallet/Unlink account already holds (token ${config.testToken}).`);
+    }
   }
 
   // --- 3. depositWithApproval: move funds into the shielded balance ---
