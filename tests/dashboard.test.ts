@@ -21,4 +21,10 @@ describe("botConnectSnippet", () => {
     expect(s).toContain("0xTOKEN");
     expect(s).toContain("payPrivate");
   });
+  it("produces a remote (apiUrl) snippet with no admin key", () => {
+    const s = botConnectSnippet({ environment: "arc-testnet", token: "0xTOKEN", apiUrl: "https://shade.vercel.app" });
+    expect(s).toContain("createShadeAgent");
+    expect(s).toContain("https://shade.vercel.app");
+    expect(s).not.toContain("apiKey");
+  });
 });
