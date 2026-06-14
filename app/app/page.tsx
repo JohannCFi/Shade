@@ -30,6 +30,7 @@ export default function AppDashboard() {
   const [activity, setActivity] = useState<Tx[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
+  const [unplugged, setUnplugged] = useState(false);
 
   async function refreshBudget(c: UnlinkClient): Promise<string> {
     const { balances } = await c.getBalances({ token: BROWSER_TOKEN });
@@ -77,6 +78,7 @@ export default function AppDashboard() {
       await (await client.depositWithApproval({ token: BROWSER_TOKEN, amount: toToken(fundAmount) })).wait();
       const nb = await refreshBudget(client);
       await refreshActivity(client);
+      setUnplugged(false);
       setMsg(`Funded. Private budget: ${nb} USDC.`);
     } catch (e) { setMsg(`Fund failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
@@ -89,7 +91,8 @@ export default function AppDashboard() {
       await (await client.withdraw({ token: BROWSER_TOKEN, amount: toToken(budget), recipientEvmAddress: evmAddr })).wait();
       await refreshBudget(client);
       await refreshActivity(client);
-      setMsg("Bot unplugged. Budget withdrawn to your wallet — it can no longer pay.");
+      setUnplugged(true);
+      setMsg("Bot unplugged. Budget withdrawn to your wallet, it can no longer pay.");
     } catch (e) { setMsg(`Unplug failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
   }
@@ -142,18 +145,25 @@ export default function AppDashboard() {
         {/* STATE 3: cockpit */}
         {client && (
           <div className="mt-6 space-y-4">
-            {/* connected status + the key instruction */}
+            {/* connection status + the key instruction */}
             <div className="rounded-xl border border-[var(--line-2)] bg-[var(--bg-panel)] p-4">
               <div className="flex items-center gap-2">
                 <span
                   className="inline-block h-2 w-2 rounded-full"
-                  style={{ background: "#34d399", boxShadow: "0 0 8px #34d399", animation: "pulse-dot 2s infinite" }}
+                  style={
+                    unplugged
+                      ? { background: "#ef4444", boxShadow: "0 0 8px #ef4444" }
+                      : { background: "#34d399", boxShadow: "0 0 8px #34d399", animation: "pulse-dot 2s infinite" }
+                  }
                 />
-                <span className="font-mono text-sm text-ink">Bot connected to Shade</span>
+                <span className="font-mono text-sm text-ink">
+                  {unplugged ? "Bot disconnected" : "Bot connected to Shade"}
+                </span>
               </div>
               <p className="hint">
-                Run your bot as usual, with the same wallet. From now on its data payments
-                route automatically through your private Shade pool, invisible on-chain.
+                {unplugged
+                  ? "Budget withdrawn to your wallet, your bot can no longer pay. Fund it again to reconnect."
+                  : "Run your bot as usual, with the same wallet. From now on its data payments route automatically through your private Shade pool, invisible on-chain."}
               </p>
             </div>
 
