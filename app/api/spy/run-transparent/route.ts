@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { runTransparentAgent } from "@/src/spy/transparent-run";
+import { runTransparentAgentStream } from "@/src/spy/transparent-run";
+import { ndjsonStream } from "@/src/spy/ndjson";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -8,27 +8,35 @@ export const maxDuration = 120;
 const TOKEN = process.env.UNLINK_TEST_TOKEN ?? "0x3600000000000000000000000000000000000000";
 
 /**
- * Live trigger: run a real transparent agent (visible on-chain payments) so the
- * LEFT spy panel reconstructs it in real time. POST { ticks?: number } (capped).
+ * Live trigger: run a real transparent agent and STREAM one NDJSON event per
+ * mined tx (start/fund/pay/decide/done), so the /spy client fills the agent
+ * panel and the left spy panel in real time. POST { ticks?: number } (capped 1–5).
  */
-export async function POST(request: Request): Promise<NextResponse> {
+export async function POST(request: Request): Promise<Response> {
   const mnemonic = process.env.WALLET_MNEMONIC;
-  if (!mnemonic) return NextResponse.json({ error: "server not configured" }, { status: 500 });
+  if (!mnemonic) {
+    return new Response(JSON.stringify({ kind: "error", message: "server not configured" }) + "\n", {
+      status: 500,
+      headers: { "Content-Type": "application/x-ndjson" },
+    });
+  }
 
   const body = await request.json().catch(() => ({}));
   const ticks = Math.min(Math.max(Number(body?.ticks) || 3, 1), 5);
 
-  try {
-    const res = await runTransparentAgent({
-      mnemonic,
-      token: TOKEN,
-      tokenDecimals: Number(process.env.UNLINK_TOKEN_DECIMALS ?? "6"),
-      environment: process.env.UNLINK_ENVIRONMENT ?? "arc-testnet",
-      rpcUrl: process.env.RPC_URL,
-      ticks,
-    });
-    return NextResponse.json({ ok: true, ...res });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
-  }
+  const events = runTransparentAgentStream({
+    mnemonic,
+    token: TOKEN,
+    tokenDecimals: Number(process.env.UNLINK_TOKEN_DECIMALS ?? "6"),
+    environment: process.env.UNLINK_ENVIRONMENT ?? "arc-testnet",
+    rpcUrl: process.env.RPC_URL,
+    ticks,
+  });
+
+  return new Response(ndjsonStream(events), {
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "Cache-Control": "no-store, no-transform",
+    },
+  });
 }
