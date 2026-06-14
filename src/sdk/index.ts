@@ -12,6 +12,7 @@ import { createPublicClient, createWalletClient, http } from "viem";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { resolveChain } from "../chain/chains.js";
 import { UNLINK_APP_ID } from "../unlink/app-id.js";
+import { buildShadeAuthHeader, makeAuthInjectingFetch } from "../unlink/bot-auth.js";
 
 /**
  * @shade/pay — the "bring your own bot" SDK.
@@ -36,8 +37,10 @@ import { UNLINK_APP_ID } from "../unlink/app-id.js";
 export interface ShadeAgentConfig {
   /** Unlink environment (default arc-testnet). */
   environment?: string;
-  /** Unlink project/admin API key (your own / self-hosted). */
-  apiKey: string;
+  /** Unlink project/admin API key. Required for admin (local) mode; ignored when `apiUrl` is set. */
+  apiKey?: string;
+  /** Deployed Shade URL. When set, the bot uses the backend routes (no admin key) — takes precedence over `apiKey`. */
+  apiUrl?: string;
   /** ERC-20 asset to spend (USDC). */
   token: string;
   /** Decimals of the asset (USDC = 6). */
@@ -62,12 +65,13 @@ function fromBaseUnits(amount: string, decimals: number): string {
 }
 
 export class ShadeAgent {
-  readonly admin: UnlinkAdmin;
+  readonly admin?: UnlinkAdmin;
   readonly evmAddress: `0x${string}`;
   private readonly environment: string;
   private readonly token: string;
   private readonly decimals: number;
   private readonly chainId: number;
+  private readonly apiUrl?: string;
   private readonly evmSigner: ReturnType<typeof privateKeyToAccount> | ReturnType<typeof mnemonicToAccount>;
   private readonly evmProvider: ReturnType<typeof evm.fromViem>;
   private _client: UnlinkClient | null = null;
@@ -76,11 +80,15 @@ export class ShadeAgent {
     if (!cfg.mnemonic && !cfg.privateKey) {
       throw new Error("ShadeAgent: provide a mnemonic or a privateKey");
     }
+    if (!cfg.apiUrl && !cfg.apiKey) {
+      throw new Error("ShadeAgent: provide apiKey (local mode) or apiUrl (remote mode)");
+    }
     const chain = resolveChain(cfg.environment ?? "arc-testnet");
     this.environment = cfg.environment ?? "arc-testnet";
     this.token = cfg.token;
     this.decimals = cfg.tokenDecimals ?? 6;
     this.chainId = chain.chainId;
+    this.apiUrl = cfg.apiUrl;
     const rpcUrl = cfg.rpcUrl ?? chain.defaultRpc;
 
     this.evmSigner = cfg.privateKey
@@ -94,7 +102,7 @@ export class ShadeAgent {
       walletClient: walletClient as unknown as ViemWalletClientLike,
       publicClient: publicClient as unknown as ViemPublicClientLike,
     });
-    this.admin = createUnlinkAdmin({ environment: this.environment, apiKey: cfg.apiKey });
+    this.admin = cfg.apiUrl ? undefined : createUnlinkAdmin({ environment: this.environment, apiKey: cfg.apiKey! });
   }
 
   /**
@@ -106,14 +114,31 @@ export class ShadeAgent {
     const message = buildDeriveSeedMessage({ appId: UNLINK_APP_ID, chainId: this.chainId });
     const signature = await this.evmSigner.signMessage({ message });
     const account = unlinkAccount.fromEthereumSignature({ signature, appId: UNLINK_APP_ID, chainId: this.chainId });
+
+    if (this.apiUrl) {
+      const apiUrl = this.apiUrl;
+      const signer = this.evmSigner;
+      const chainId = this.chainId;
+      const authHeader = () => buildShadeAuthHeader(signer, { appId: UNLINK_APP_ID, chainId });
+      return createUnlinkClient({
+        environment: this.environment,
+        account,
+        evm: this.evmProvider,
+        registerUrl: `${apiUrl}/api/unlink/register`,
+        authorizationToken: { url: `${apiUrl}/api/unlink/authorization-token` },
+        customFetch: makeAuthInjectingFetch(apiUrl, authHeader),
+      });
+    }
+
+    // admin (local) mode — unchanged from before
     return createUnlinkClient({
       environment: this.environment,
       account,
       evm: this.evmProvider,
-      register: (payload) => this.admin.users.register(payload),
+      register: (payload) => this.admin!.users.register(payload),
       authorizationToken: {
         provider: async (ctx) => {
-          const tok = await this.admin.authorizationTokens.issue({ unlinkAddress: ctx.unlinkAddress });
+          const tok = await this.admin!.authorizationTokens.issue({ unlinkAddress: ctx.unlinkAddress });
           return { token: tok.token, expiresAt: tok.expiresAt };
         },
       },

@@ -43,7 +43,7 @@ async function main() {
   const botMnemonic = process.env.BOT_WALLET_MNEMONIC ?? config.mnemonic;
   const shade = createShadeAgent({
     environment: config.environment,
-    apiKey: config.apiKey,
+    ...(process.env.SHADE_API_URL ? { apiUrl: process.env.SHADE_API_URL } : { apiKey: config.apiKey }),
     token: config.testToken,
     tokenDecimals: config.tokenDecimals,
     ...(botPrivateKey ? { privateKey: botPrivateKey } : { mnemonic: botMnemonic }),
