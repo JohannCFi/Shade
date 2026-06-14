@@ -64,18 +64,25 @@ async function main() {
   }
   console.log(`budget: ${await shade.budget()} USDC\n`);
 
+  // One log line per PRIVATE TRANSFER, same `transfer → unlink1…` format as the
+  // dashboard's Activity panel — so the line count matches 1:1 on both sides.
+  const short = (a: string) => `${a.slice(0, 14)}…`;
+  let transfers = 0;
   for (let t = 0; t < TICKS; t++) {
-    await shade.payPrivate(ethSeller, PRICE); // pay ETH oracle privately
-    await shade.payPrivate(btcSeller, PRICE); // pay BTC oracle privately
     const ethPrice = ethPriceAt(t);
     const btcSignal = btcSignalAt(t);
     const action = myStrategy(ethPrice, btcSignal);
-    console.log(`t${t + 1}: ETH=${ethPrice} BTC=${btcSignal} → ${action}   (paid 2× privately)`);
+    console.log(`\n── tick ${t + 1}  ·  ETH=${ethPrice}  BTC=${btcSignal}  →  decision ${action}`);
+
+    await shade.payPrivate(ethSeller, PRICE);
+    console.log(`   transfer → ${short(ethSeller)}   ETH price  · ${PRICE} USDC · private`); transfers++;
+    await shade.payPrivate(btcSeller, PRICE);
+    console.log(`   transfer → ${short(btcSeller)}   BTC signal · ${PRICE} USDC · private`); transfers++;
   }
 
   console.log(`\nremaining budget: ${await shade.budget()} USDC`);
-  console.log("\n=== ✅ my bot ran on Shade — payments private, nothing leaked on-chain ===");
-  console.log("(Open /app connected with this wallet to watch these in the Activity panel.)");
+  console.log(`\n=== ✅ ${transfers} private transfers this run — nothing leaked on-chain ===`);
+  console.log(`The same ${transfers} 'transfer → unlink1…' lines appear in /app → Activity (Refresh; newest first).`);
 }
 
 main().catch((e) => {
