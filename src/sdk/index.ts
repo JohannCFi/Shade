@@ -37,9 +37,9 @@ import { buildShadeAuthHeader, makeAuthInjectingFetch } from "../unlink/bot-auth
 export interface ShadeAgentConfig {
   /** Unlink environment (default arc-testnet). */
   environment?: string;
-  /** Unlink project/admin API key. Required for admin (local) mode; omit in remote mode. */
+  /** Unlink project/admin API key. Required for admin (local) mode; ignored when `apiUrl` is set. */
   apiKey?: string;
-  /** Deployed Shade URL. When set, the bot uses the backend routes (no admin key). */
+  /** Deployed Shade URL. When set, the bot uses the backend routes (no admin key) — takes precedence over `apiKey`. */
   apiUrl?: string;
   /** ERC-20 asset to spend (USDC). */
   token: string;
