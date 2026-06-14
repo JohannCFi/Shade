@@ -59,6 +59,14 @@ each linking to `…/tx/<hash>` on ArcScan. The point we're making: *here are th
 transactions — verify them yourself — and the spy on the right still can't tell who
 paid whom or what strategy produced them.*
 
+**Decision/price data source.** Today `transparent-run.ts` is a raw transfer loop with
+no prices or decisions. The generator must compute them per tick from the existing
+**pure, deterministic** modules — `ethPriceAt(tick)` / `btcSignalAt(tick)`
+(`src/oracle/feed.ts`) and `decide()` (`src/agent/strategy.ts`) — the same data the
+rest of the app uses. No oracle HTTP call is added; the real **payments** stay exactly
+as they are. This keeps the streamed `decide` rows truthful and consistent with the
+strategy the spy panels describe.
+
 ## Live mechanism (true streaming)
 Today `runTransparentAgent` does all ticks then returns one blob, and the client
 polls `/api/spy`. That can't show Tx "as they pass." Changes:
@@ -67,7 +75,8 @@ polls `/api/spy`. That can't show Tx "as they pass." Changes:
    as each tx is mined, instead of returning at the end:
    - `{ kind: "fund", hash }` (funder→agent edge)
    - `{ kind: "pay", tick, oracle: "ETH"|"BTC", amount, hash }`
-   - `{ kind: "decide", tick, action, ethPrice, btcSignal }`
+   - `{ kind: "decide", tick, action, ethPrice, btcSignal }` — computed via `feed.ts`
+     + `decide()` (pure, deterministic; no oracle HTTP)
    - `{ kind: "done", agent }`
    The existing return shape (`{ agent, ticks }`) is reconstructed from the stream so
    `scripts/spy-live.ts` and tests keep working (the generator is wrapped by a small
