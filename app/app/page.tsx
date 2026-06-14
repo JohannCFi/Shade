@@ -16,7 +16,14 @@ import { computeDefaultFundAmount, botConnectSnippet } from "@/src/dashboard/hel
 
 const GAS_RESERVE = (5n * 10n ** BigInt(Math.max(BROWSER_TOKEN_DECIMALS - 1, 0))).toString(); // 0.5
 
-interface Tx { type?: string; status?: string }
+interface Tx {
+  id?: string;
+  type?: string;
+  status?: string;
+  created_at?: string;
+  recipient_address?: string;
+  tx_hash?: string | null;
+}
 
 export default function AppDashboard() {
   const { primaryWallet, setShowAuthFlow, handleLogOut } = useDynamicContext();
@@ -224,14 +231,27 @@ export default function AppDashboard() {
               {activity.length === 0 ? (
                 <p className="hint !mt-0">No private payments yet.</p>
               ) : (
-                <ul className="space-y-1.5 font-mono text-xs text-muted">
-                  {activity.map((t, i) => (
-                    <li key={i} className="flex justify-between border-b border-[var(--line)] py-1.5 last:border-0">
-                      <span>{t.type ?? "transfer"}</span>
-                      <span className="text-faint">{t.status ?? ""}</span>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <p className="hint !mt-0 mb-2">Last {activity.length} private transfers (newest first):</p>
+                  <ul className="space-y-1.5 font-mono text-xs text-muted">
+                    {[...activity]
+                      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+                      .map((t, i) => {
+                        const time = t.created_at ? new Date(t.created_at).toLocaleTimeString() : "";
+                        const to = t.recipient_address ? `→ ${t.recipient_address.slice(0, 14)}…` : "";
+                        return (
+                          <li key={t.id ?? i} className="flex items-baseline justify-between gap-3 border-b border-[var(--line)] py-1.5 last:border-0">
+                            <span className="truncate">
+                              {t.type ?? "transfer"} <span className="text-faint">{to}</span>
+                            </span>
+                            <span className="shrink-0 text-faint">
+                              {time}{time && t.status ? " · " : ""}{t.status ?? ""}
+                            </span>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </>
               )}
             </Card>
           </div>
