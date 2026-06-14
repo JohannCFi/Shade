@@ -12,6 +12,9 @@ export interface AgentLogProps {
   tick: { current: number; total: number } | null;
 }
 
+const rowKey = (e: RunEvent, i: number) =>
+  e.kind === "decide" ? `decide-${e.tick}` : `${e.kind}-${"hash" in e ? e.hash : i}`;
+
 export function AgentLog({ events, explorerBase, running, tick }: AgentLogProps) {
   const rows = events.filter((e) => e.kind === "fund" || e.kind === "pay" || e.kind === "decide");
 
@@ -36,7 +39,7 @@ export function AgentLog({ events, explorerBase, running, tick }: AgentLogProps)
         ) : (
           <ul className="space-y-0.5">
             {rows.map((e, i) => (
-              <li key={i} className="grid grid-cols-[2.2rem_1fr_auto_8rem] items-baseline gap-3 border-b border-[var(--line)] py-1.5 font-mono text-xs last:border-0">
+              <li key={rowKey(e, i)} className="grid grid-cols-[2.2rem_1fr_auto_8rem] items-baseline gap-3 border-b border-[var(--line)] py-1.5 font-mono text-xs last:border-0">
                 <span className="text-faint">t{("tick" in e ? e.tick : 0) + 1}</span>
                 {e.kind === "decide" ? (
                   <>

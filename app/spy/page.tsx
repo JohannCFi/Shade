@@ -66,23 +66,27 @@ export default function SpyPage() {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const parsed = parseNdjsonLines(buffer, decoder.decode(value, { stream: true }));
-        buffer = parsed.rest;
-        for (const raw of parsed.lines) {
-          const e = raw as RunEvent;
-          if (e.kind === "start") { setExplorerBase(e.explorerBase); continue; }
-          if (e.kind === "error") throw new Error(e.message);
-          setEvents((prev) => [...prev, e]);
-          if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
-          if (e.kind === "fund" || e.kind === "pay") {
-            // Each new hash → let the spy panels re-read the chain.
-            fetchRail("transparent").then(setLeft);
-            fetchRail("unlink").then(setRight);
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const parsed = parseNdjsonLines(buffer, decoder.decode(value, { stream: true }));
+          buffer = parsed.rest;
+          for (const raw of parsed.lines) {
+            const e = raw as RunEvent;
+            if (e.kind === "start") { setExplorerBase(e.explorerBase); continue; }
+            if (e.kind === "error") throw new Error(e.message);
+            setEvents((prev) => [...prev, e]);
+            if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
+            if (e.kind === "fund" || e.kind === "pay") {
+              // Each new hash → let the spy panels re-read the chain.
+              fetchRail("transparent").then(setLeft).catch(() => {});
+              fetchRail("unlink").then(setRight).catch(() => {});
+            }
           }
         }
+      } finally {
+        reader.cancel().catch(() => {});
       }
 
       await refresh();
