@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Shade — Architecture</title>
+  <style>
+    body { margin: 0; background: #08080a; color: #f4f3f0; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 64px; }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
+    .sub { color: #8d8d8b; font-size: .9rem; margin: 0 0 28px; }
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 0 0 24px; font-size: .8rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+    .card { background: #0e0e10; border: 1px solid #222; border-radius: 14px; padding: 22px; }
+    .hint { color: #56565a; font-size: .78rem; margin-top: 20px; }
+    .mermaid { display: flex; justify-content: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Shade — Private nanopayments for AI agents</h1>
+    <p class="sub">Dynamic (wallet) · Unlink (private routing) · Circle (settlement) · Arc Testnet</p>
+    <div class="legend">
+      <span><span class="dot" style="background:#3b82f6"></span>Dynamic</span>
+      <span><span class="dot" style="background:#a855f7"></span>Unlink</span>
+      <span><span class="dot" style="background:#22c55e"></span>Circle</span>
+      <span><span class="dot" style="background:#ef4444"></span>exposed rail</span>
+      <span><span class="dot" style="background:#22c55e"></span>private rail</span>
+    </div>
+    <div class="card">
+      <pre class="mermaid">
+flowchart TB
+  U([User]):::user
+
+  subgraph FE["Frontend · Next.js"]
+    DYN["Dynamic SDK<br/>connect wallet · onboarding"]:::dyn
+    DEP["Deploy: sign → derive<br/>Unlink private identity (1 wallet = 1 bot)"]:::core
+    FUND["Fund private budget"]:::core
+  end
+
+  subgraph BE["Backend · Next.js API routes"]
+    AUTH["Unlink auth routes<br/>admin key stays server-side"]:::core
+    X402["x402 oracle routes"]:::core
+  end
+
+  subgraph RAILS["Same agent · two rails · the /spy demo"]
+    LEFT["TRANSPARENT rail (bare x402)<br/>pay-per-call settles via Circle Gateway<br/>spy reconstructs funder · oracles · budget · strategy"]:::leak
+    RIGHT["PRIVATE rail (Unlink)<br/>shielded transfers inside the pool<br/>spy sees only noise"]:::safe
+  end
+
+  EXT["Bring-your-own-bot<br/>@shade/pay SDK · self-custody wallet"]:::ext
+  CIRCLE["Circle Gateway<br/>nanopayment settlement"]:::circle
+  UNLINK["Unlink engine<br/>private accounts + routing"]:::unlink
+
+  U --> DYN --> DEP --> FUND
+  FUND --> RIGHT
+  X402 -->|"Circle x402 verify + settle"| LEFT
+  EXT -->|"ShadeSig wallet proof — no admin key"| AUTH
+  AUTH -->|"scoped Unlink token"| RIGHT
+  CIRCLE -.-> X402
+  UNLINK -.-> RIGHT
+
+  classDef dyn fill:#3b82f6,stroke:#1d4ed8,color:#fff
+  classDef circle fill:#22c55e,stroke:#15803d,color:#fff
+  classDef unlink fill:#a855f7,stroke:#7e22ce,color:#fff
+  classDef leak fill:#3a1a1a,stroke:#ef4444,color:#fca5a5
+  classDef safe fill:#10231a,stroke:#22c55e,color:#86efac
+  classDef core fill:#1a1a1f,stroke:#555,color:#ddd
+  classDef ext fill:#1a1a1f,stroke:#7da7c7,color:#cbd5e1
+  classDef user fill:#f4f3f0,stroke:#888,color:#111
+      </pre>
+    </div>
+    <p class="hint">Export: right-click the diagram → “Save image as…”, or screenshot. The same source is in <code>docs/architecture.mmd</code> — paste it into <a style="color:#7da7c7" href="https://mermaid.live">mermaid.live</a> and click <b>Actions → PNG/SVG</b> for a clean export.</p>
+  </div>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", flowchart: { useMaxWidth: true, htmlLabels: true } });
+  </script>
+</body>
+</html>
