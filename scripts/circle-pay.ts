@@ -12,7 +12,7 @@ import { mnemonicToAccount } from "viem/accounts";
 import { config } from "../src/unlink/config.js";
 
 const DEPOSIT_USDC = process.env.CIRCLE_DEPOSIT ?? "0.5"; // capped per night guardrail
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:3210";
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000"; // matches `npm run dev`
 const oracleUrl = process.argv[2] ?? `${BASE_URL}/api/x402/eth?tick=3`;
 
 function buyerPrivateKey(): `0x${string}` {
