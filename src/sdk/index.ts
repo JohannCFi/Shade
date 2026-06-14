@@ -7,9 +7,11 @@ import {
   type ViemPublicClientLike,
 } from "@unlink-xyz/sdk/client";
 import { createUnlinkAdmin, type UnlinkAdmin } from "@unlink-xyz/sdk/admin";
+import { buildDeriveSeedMessage } from "@unlink-xyz/sdk/crypto";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { resolveChain } from "../chain/chains.js";
+import { UNLINK_APP_ID } from "../unlink/app-id.js";
 
 /**
  * @shade/pay — the "bring your own bot" SDK.
@@ -18,6 +20,12 @@ import { resolveChain } from "../chain/chains.js";
  * budget once, then pay per call via Unlink. Your strategy stays yours; Shade is
  * just the private payment rail. Self-tenant: you configure it with your own
  * project key + your own account key, and it pays from YOUR budget.
+ *
+ * The bot's private identity is derived the SAME way the /app dashboard derives
+ * it — from the wallet's signature of the canonical derive-seed message. So the
+ * same wallet always maps to the same single bot, whether you deploy it in the
+ * dashboard or run it here. Deploy + fund in /app, then run your bot with the
+ * same wallet: it pays from that budget and shows up in the dashboard's Activity.
  *
  * @example
  * const shade = createShadeAgent({ apiKey, mnemonic, token });
@@ -55,42 +63,53 @@ function fromBaseUnits(amount: string, decimals: number): string {
 
 export class ShadeAgent {
   readonly admin: UnlinkAdmin;
-  readonly client: UnlinkClient;
   readonly evmAddress: `0x${string}`;
+  private readonly environment: string;
   private readonly token: string;
   private readonly decimals: number;
-  private registered = false;
+  private readonly chainId: number;
+  private readonly evmSigner: ReturnType<typeof privateKeyToAccount> | ReturnType<typeof mnemonicToAccount>;
+  private readonly evmProvider: ReturnType<typeof evm.fromViem>;
+  private _client: UnlinkClient | null = null;
 
   constructor(cfg: ShadeAgentConfig) {
     if (!cfg.mnemonic && !cfg.privateKey) {
       throw new Error("ShadeAgent: provide a mnemonic or a privateKey");
     }
     const chain = resolveChain(cfg.environment ?? "arc-testnet");
+    this.environment = cfg.environment ?? "arc-testnet";
     this.token = cfg.token;
     this.decimals = cfg.tokenDecimals ?? 6;
+    this.chainId = chain.chainId;
     const rpcUrl = cfg.rpcUrl ?? chain.defaultRpc;
 
-    const evmSigner = cfg.privateKey
+    this.evmSigner = cfg.privateKey
       ? privateKeyToAccount(cfg.privateKey as `0x${string}`)
       : mnemonicToAccount(cfg.mnemonic!);
-    this.evmAddress = evmSigner.address;
+    this.evmAddress = this.evmSigner.address;
 
-    const walletClient = createWalletClient({ account: evmSigner, chain: chain.viemChain, transport: http(rpcUrl) });
+    const walletClient = createWalletClient({ account: this.evmSigner, chain: chain.viemChain, transport: http(rpcUrl) });
     const publicClient = createPublicClient({ chain: chain.viemChain, transport: http(rpcUrl) });
-    const evmProvider = evm.fromViem({
+    this.evmProvider = evm.fromViem({
       walletClient: walletClient as unknown as ViemWalletClientLike,
       publicClient: publicClient as unknown as ViemPublicClientLike,
     });
+    this.admin = createUnlinkAdmin({ environment: this.environment, apiKey: cfg.apiKey });
+  }
 
-    const account = cfg.mnemonic
-      ? unlinkAccount.fromMnemonic({ mnemonic: cfg.mnemonic })
-      : unlinkAccount.fromSeed({ seed: hexToSeed(cfg.privateKey!) });
-
-    this.admin = createUnlinkAdmin({ environment: cfg.environment ?? "arc-testnet", apiKey: cfg.apiKey });
-    this.client = createUnlinkClient({
-      environment: cfg.environment ?? "arc-testnet",
+  /**
+   * Build the Unlink client lazily on first use: the wallet signs the canonical
+   * derive-seed message and the account comes from that signature — identical to
+   * `createBrowserUnlinkClient` in the dashboard, so the identities match.
+   */
+  private async buildClient(): Promise<UnlinkClient> {
+    const message = buildDeriveSeedMessage({ appId: UNLINK_APP_ID, chainId: this.chainId });
+    const signature = await this.evmSigner.signMessage({ message });
+    const account = unlinkAccount.fromEthereumSignature({ signature, appId: UNLINK_APP_ID, chainId: this.chainId });
+    return createUnlinkClient({
+      environment: this.environment,
       account,
-      evm: evmProvider,
+      evm: this.evmProvider,
       register: (payload) => this.admin.users.register(payload),
       authorizationToken: {
         provider: async (ctx) => {
@@ -101,17 +120,24 @@ export class ShadeAgent {
     });
   }
 
-  /** Register the agent's Unlink account (idempotent). */
+  /** The underlying Unlink client. Call {@link ready} first. */
+  get client(): UnlinkClient {
+    if (!this._client) throw new Error("ShadeAgent: call ready() before using the client");
+    return this._client;
+  }
+
+  /** Derive + register the agent's Unlink account (idempotent). */
   async ready(): Promise<this> {
-    if (!this.registered) {
-      await this.client.ensureRegistered();
-      this.registered = true;
+    if (!this._client) {
+      this._client = await this.buildClient();
+      await this._client.ensureRegistered();
     }
     return this;
   }
 
   /** Your private Unlink (bech32m) address. */
-  address(): Promise<string> {
+  async address(): Promise<string> {
+    await this.ready();
     return this.client.getAddress();
   }
 
@@ -155,14 +181,4 @@ export class ShadeAgent {
 
 export function createShadeAgent(cfg: ShadeAgentConfig): ShadeAgent {
   return new ShadeAgent(cfg);
-}
-
-/** Turn a 0x private key into a 64-byte seed for Unlink's fromSeed. */
-function hexToSeed(privateKey: string): Uint8Array {
-  const hex = privateKey.replace(/^0x/, "").padStart(64, "0").slice(0, 64);
-  const half = new Uint8Array(hex.match(/../g)!.map((h) => parseInt(h, 16)));
-  const seed = new Uint8Array(64);
-  seed.set(half, 0);
-  seed.set(half, 32);
-  return seed;
 }

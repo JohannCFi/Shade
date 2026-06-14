@@ -23,7 +23,8 @@ export function computeDefaultFundAmount(
 export function botConnectSnippet(opts: { environment: string; token: string }): string {
   return `import { createShadeAgent } from "@shade/pay";
 
-// Same wallet you connected = same private bot identity.
+// Same wallet you connected here = the SAME private bot identity (derived from
+// your wallet signature, exactly like this dashboard). Pays from this budget.
 const shade = createShadeAgent({
   environment: "${opts.environment}",
   apiKey: process.env.SHADE_API_KEY!,        // your Shade/Unlink project key
