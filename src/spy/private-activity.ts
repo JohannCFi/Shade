@@ -1,4 +1,4 @@
-import { fromBaseUnits } from "../unlink/config.js";
+import { fromBaseUnits } from "../unlink/units.js";
 
 export interface PrivateActivitySummary {
   agentTxCount: number;

@@ -17,10 +17,19 @@ export async function GET(request: Request): Promise<NextResponse> {
   const mnemonic = process.env.WALLET_MNEMONIC;
   if (!mnemonic) return NextResponse.json({ error: "server not configured" }, { status: 500 });
 
-  const rail = new URL(request.url).searchParams.get("rail") === "unlink" ? "unlink" : "transparent";
+  const params = new URL(request.url).searchParams;
+  const rail = params.get("rail") === "unlink" ? "unlink" : "transparent";
   const addrs = deriveSpyAddresses(mnemonic);
-  const address = rail === "unlink" ? addrs.unlink : addrs.transparent;
   const oracleSet = new Set([addrs.ethOracle.toLowerCase(), addrs.btcOracle.toLowerCase()]);
+
+  // The transparent agent is ephemeral (a fresh EOA per run), so the client passes
+  // the current run's address. With no address there is no run to spy on yet → the
+  // left panel reads empty (starts from zero). The unlink rail is always blind.
+  const addressParam = params.get("address");
+  if (rail === "transparent" && !addressParam) {
+    return NextResponse.json({ rail, address: null, report: null, txs: [], explorerBase: null });
+  }
+  const address = rail === "unlink" ? addrs.unlink : (addressParam as `0x${string}`);
 
   const payments = await readObservablePayments({
     address,

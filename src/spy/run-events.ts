@@ -6,9 +6,10 @@ import type { Action, BtcSignal } from "../agent/strategy.js";
  * type without bundling node-only code.
  */
 export type RunEvent =
-  | { kind: "start"; explorerBase: string }
+  | { kind: "start"; explorerBase: string; agent: `0x${string}` }
   | { kind: "fund"; hash: `0x${string}` }
   | { kind: "pay"; tick: number; oracle: "ETH" | "BTC"; amount: string; hash: `0x${string}` }
   | { kind: "decide"; tick: number; action: Action; ethPrice: number; btcSignal: BtcSignal }
+  | { kind: "private"; payments: number; sellersReceived: { label: string; amount: string }[] }
   | { kind: "done"; agent: `0x${string}` }
   | { kind: "error"; message: string };

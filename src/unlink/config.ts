@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { resolveChain } from "../chain/chains.js";
+import { fromBaseUnits as fmt, toBaseUnits as toBase } from "./units.js";
 
 /**
  * Centralised, validated configuration for the Unlink integration.
@@ -45,17 +46,9 @@ export const config = {
 } as const;
 
 /** Convert a human amount (e.g. "0.25") to base units as a decimal string. */
-export function toBaseUnits(amount: string, decimals = config.tokenDecimals): string {
-  const [whole, frac = ""] = amount.split(".");
-  const fracPadded = (frac + "0".repeat(decimals)).slice(0, decimals);
-  const combined = `${whole}${fracPadded}`.replace(/^0+(?=\d)/, "");
-  return combined === "" ? "0" : combined;
-}
+export const toBaseUnits = (amount: string, decimals = config.tokenDecimals): string =>
+  toBase(amount, decimals);
 
 /** Format base units back to a human-readable decimal string. */
-export function fromBaseUnits(amount: string, decimals = config.tokenDecimals): string {
-  const padded = amount.padStart(decimals + 1, "0");
-  const whole = padded.slice(0, padded.length - decimals);
-  const frac = padded.slice(padded.length - decimals).replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole;
-}
+export const fromBaseUnits = (amount: string, decimals = config.tokenDecimals): string =>
+  fmt(amount, decimals);

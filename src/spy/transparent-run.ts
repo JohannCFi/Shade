@@ -1,5 +1,5 @@
 import { createWalletClient, createPublicClient, http, erc20Abi, parseEther } from "viem";
-import { mnemonicToAccount } from "viem/accounts";
+import { mnemonicToAccount, privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { resolveChain } from "../chain/chains.js";
 import { decide } from "../agent/strategy.js";
 import { ethPriceAt, btcSignalAt } from "../oracle/feed.js";
@@ -34,7 +34,11 @@ function priceFor(decimals: number): bigint {
   return 10n ** BigInt(Math.max(decimals - 3, 0)); // 0.001 token
 }
 
-/** Build the real-chain IO (funder index 0, transparent agent index 6). */
+/**
+ * Build the real-chain IO. Funder is the project wallet (index 0); the agent is a
+ * FRESH ephemeral EOA generated per run, so the spy reconstructs only THIS run —
+ * the left panel starts from zero every time instead of showing accumulated history.
+ */
 function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses, ticks: number): TransparentRunIO {
   const chain = resolveChain(opts.environment ?? "arc-testnet");
   const rpcUrl = opts.rpcUrl ?? chain.defaultRpc;
@@ -42,7 +46,7 @@ function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses, ticks: number
   const price = priceFor(opts.tokenDecimals ?? 6);
 
   const funder = mnemonicToAccount(opts.mnemonic);
-  const agent = mnemonicToAccount(opts.mnemonic, { accountIndex: 6 });
+  const agent = privateKeyToAccount(generatePrivateKey());
   const pub = createPublicClient({ chain: chain.viemChain, transport: http(rpcUrl) });
   const funderWallet = createWalletClient({ account: funder, chain: chain.viemChain, transport: http(rpcUrl) });
   const agentWallet = createWalletClient({ account: agent, chain: chain.viemChain, transport: http(rpcUrl) });
@@ -81,7 +85,7 @@ export async function* runTransparentAgentStream(
   const runner = io ?? makeRealIo(opts, addrs, ticks);
   const explorerBase = resolveChain(opts.environment ?? "arc-testnet").viemChain.blockExplorers?.default?.url ?? FALLBACK_EXPLORER;
 
-  yield { kind: "start", explorerBase };
+  yield { kind: "start", explorerBase, agent: runner.agent };
   yield { kind: "fund", hash: await runner.fund() };
 
   let prevEth = 0;

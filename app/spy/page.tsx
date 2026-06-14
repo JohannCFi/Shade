@@ -21,9 +21,12 @@ interface RailData { report: SpyReport | null; txs: SpyTx[] }
 const usd = (atomic: string) => `${(Number(atomic) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`;
 const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
-async function fetchRail(rail: "transparent" | "unlink"): Promise<RailData> {
+type PrivateResult = { payments: number; sellersReceived: { label: string; amount: string }[] };
+
+async function fetchRail(rail: "transparent" | "unlink", address?: string | null): Promise<RailData> {
   try {
-    const r = await fetch(`/api/spy?rail=${rail}`, { cache: "no-store" });
+    const q = address ? `&address=${address}` : "";
+    const r = await fetch(`/api/spy?rail=${rail}${q}`, { cache: "no-store" });
     const j = await r.json();
     return { report: j.report ?? null, txs: j.txs ?? [] };
   } catch {
@@ -40,21 +43,30 @@ export default function SpyPage() {
   const [explorerBase, setExplorerBase] = useState("https://testnet.arcscan.app");
   const [liveTick, setLiveTick] = useState<{ current: number; total: number } | null>(null);
   const [verify, setVerify] = useState<string | null>(null);
+  const [agentAddr, setAgentAddr] = useState<string | null>(null);
+  const [privateResult, setPrivateResult] = useState<PrivateResult | null>(null);
+  const [ranOnce, setRanOnce] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [l, r] = await Promise.all([fetchRail("transparent"), fetchRail("unlink")]);
-    setLeft(l); setRight(r);
-  }, []);
+    const r = await fetchRail("unlink");
+    setRight(r);
+    setLeft(agentAddr ? await fetchRail("transparent", agentAddr) : { report: null, txs: [] });
+  }, [agentAddr]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  // On load only the (always-blind) right rail is read; the left starts empty and
+  // fills only once a run produces its ephemeral agent.
+  useEffect(() => { fetchRail("unlink").then(setRight); }, []);
 
   async function runLive() {
     const totalTicks = 3;
     setRunning(true);
     setEvents([]);
     setVerify(null);
+    setPrivateResult(null);
+    setLeft({ report: null, txs: [] });
     setLiveTick({ current: 1, total: totalTicks });
     setStatus("Streaming the agent's real payments on Arc…");
+    let runAgent: string | null = null;
     try {
       const res = await fetch("/api/spy/run-transparent", {
         method: "POST",
@@ -75,13 +87,19 @@ export default function SpyPage() {
           buffer = parsed.rest;
           for (const raw of parsed.lines) {
             const e = raw as RunEvent;
-            if (e.kind === "start") { setExplorerBase(e.explorerBase); continue; }
+            if (e.kind === "start") {
+              runAgent = e.agent;
+              setAgentAddr(e.agent);
+              setExplorerBase(e.explorerBase);
+              continue;
+            }
             if (e.kind === "error") throw new Error(e.message);
+            if (e.kind === "private") { setPrivateResult({ payments: e.payments, sellersReceived: e.sellersReceived }); continue; }
             setEvents((prev) => [...prev, e]);
             if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
             if (e.kind === "fund" || e.kind === "pay") {
-              // Each new hash → let the spy panels re-read the chain.
-              fetchRail("transparent").then(setLeft).catch(() => {});
+              // Each new hash → let the spy panels re-read the chain (left scoped to this run's agent).
+              fetchRail("transparent", runAgent).then(setLeft).catch(() => {});
               fetchRail("unlink").then(setRight).catch(() => {});
             }
           }
@@ -90,7 +108,9 @@ export default function SpyPage() {
         reader.cancel().catch(() => {});
       }
 
-      await refresh();
+      setRight(await fetchRail("unlink"));
+      if (runAgent) setLeft(await fetchRail("transparent", runAgent));
+      setRanOnce(true);
       setStatus("Done — left reconstructed from the chain; right stayed dark.");
     } catch (e) {
       setStatus(`Failed: ${(e as Error).message}`);
@@ -100,16 +120,19 @@ export default function SpyPage() {
     }
   }
 
-  async function verifyPrivate() {
-    setVerify("Checking the Unlink engine…");
-    try {
-      const j = await fetch("/api/spy/verify-private", { cache: "no-store" }).then((r) => r.json());
-      if (!j.ok) { setVerify("Engine unavailable — run the agent on the private rail first."); return; }
-      const sellers = (j.sellersReceived as { label: string; amount: string }[]).map((s) => `${s.label} ${s.amount}`).join(" · ");
-      setVerify(`${j.agentTxCount} private payments confirmed via the engine — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`);
-    } catch (e) {
-      setVerify(`Engine error: ${(e as Error).message}`);
+  function verifyPrivate() {
+    if (!ranOnce) {
+      setVerify("Run the agent live first — then verify this run's private payments.");
+      return;
     }
+    if (!privateResult) {
+      setVerify("Private rail unavailable this run — check the Unlink pool/engine.");
+      return;
+    }
+    const sellers = privateResult.sellersReceived.map((s) => `${s.label} ${s.amount}`).join(" · ");
+    setVerify(
+      `${privateResult.payments} private payments confirmed via the engine this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`,
+    );
   }
 
   return (
