@@ -15,6 +15,7 @@ import {
 import { computeDefaultFundAmount, botConnectSnippet } from "@/src/dashboard/helpers";
 
 const GAS_RESERVE = (5n * 10n ** BigInt(Math.max(BROWSER_TOKEN_DECIMALS - 1, 0))).toString(); // 0.5
+const APP_URL = process.env.NEXT_PUBLIC_SHADE_APP_URL ?? "";
 
 interface Tx {
   id?: string;
@@ -213,9 +214,9 @@ export default function AppDashboard() {
             </Card>
 
             <Card title="Connect your external bot">
-              <p className="hint !mt-0 mb-3">Use this wallet in your own bot, same identity, same private budget.</p>
+              <p className="hint !mt-0 mb-3">Run your bot anywhere with this wallet — it authenticates with its own key, no admin key needed.</p>
               <pre className="overflow-x-auto rounded-lg border border-[var(--line)] bg-[var(--bg-panel)] p-4 font-mono text-[0.72rem] leading-relaxed text-muted">
-{botConnectSnippet({ environment: "arc-testnet", token: BROWSER_TOKEN })}
+{botConnectSnippet({ environment: "arc-testnet", token: BROWSER_TOKEN, apiUrl: APP_URL || undefined })}
               </pre>
             </Card>
 
