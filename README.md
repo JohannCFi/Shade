@@ -58,3 +58,42 @@ npm run check:activity   # verify private payments via the Unlink engine
 
 Copy `.env.example` → `.env` and fill in: `UNLINK_API_KEY`, `UNLINK_ENVIRONMENT=arc-testnet`,
 `WALLET_MNEMONIC`, `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID`. See `.env.example` for the full list.
+
+## Deploy (Vercel)
+
+Set these env vars in the Vercel project (server-side, **never** exposed to users):
+
+```
+UNLINK_API_KEY          # admin key — stays on the server, never shipped to bots
+UNLINK_ENVIRONMENT=arc-testnet
+UNLINK_TEST_TOKEN=0x3600000000000000000000000000000000000000
+UNLINK_TOKEN_DECIMALS=6
+WALLET_MNEMONIC         # project wallet (in-app demo + oracle sellers)
+RPC_URL=https://rpc.testnet.arc.network
+NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID
+NEXT_PUBLIC_UNLINK_ENVIRONMENT=arc-testnet
+NEXT_PUBLIC_UNLINK_TOKEN=0x3600000000000000000000000000000000000000
+NEXT_PUBLIC_UNLINK_TOKEN_DECIMALS=6
+NEXT_PUBLIC_SHADE_APP_URL   # the deployed URL, shown in the "connect your bot" snippet
+```
+
+### Bring your own bot (no admin key)
+
+Any self-custody user can run their own bot against the deployed app — it
+authenticates with **its own wallet signature**, never the admin key:
+
+```ts
+import { createShadeAgent } from "@shade/pay";
+
+const shade = createShadeAgent({
+  environment: "arc-testnet",
+  apiUrl: "https://<your-deployment>",      // remote mode — no admin key
+  token: "0x3600000000000000000000000000000000000000",
+  privateKey: process.env.BOT_WALLET_PRIVATE_KEY!, // the bot's own wallet
+});
+await shade.payPrivate(oracleAddress, "0.001"); // private, invisible on-chain
+```
+
+The bot signs a stateless proof (`ShadeSig`); the backend verifies it and issues
+Unlink tokens **scoped to that wallet's address only**. Test locally:
+`SHADE_API_URL=http://localhost:3001 npx tsx scripts/my-bot.ts --ticks 2`.
