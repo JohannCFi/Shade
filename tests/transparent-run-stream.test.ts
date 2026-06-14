@@ -42,7 +42,7 @@ describe("runTransparentAgentStream", () => {
     const decides = (await collect(2)).filter((e): e is Extract<RunEvent, { kind: "decide" }> => e.kind === "decide");
     expect(decides).toHaveLength(2);
     expect(typeof decides[0].ethPrice).toBe("number");
-    expect(["BUY", "SELL", "HOLD"]).toContain(decides[0].action);
+    expect(decides[0].action).toBe("HOLD");
   });
 
   it("clamps ticks into [1,5]", async () => {

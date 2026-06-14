@@ -16,6 +16,13 @@ describe("ndjsonStream", () => {
     expect(lines[0]).toEqual({ ok: 1 });
     expect(lines[1]).toEqual({ kind: "error", message: "boom" });
   });
+
+  it("emits a final error line with message if source throws a non-Error (string)", async () => {
+    async function* stringThrower() { throw "kaboom"; }
+    const text = await new Response(ndjsonStream(stringThrower())).text();
+    const lines = text.trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines[0]).toEqual({ kind: "error", message: "kaboom" });
+  });
 });
 
 describe("parseNdjsonLines", () => {

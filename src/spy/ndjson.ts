@@ -14,7 +14,7 @@ export function ndjsonStream(source: AsyncIterable<unknown>): ReadableStream<Uin
         if (done) { controller.close(); return; }
         controller.enqueue(encoder.encode(JSON.stringify(value) + "\n"));
       } catch (err) {
-        controller.enqueue(encoder.encode(JSON.stringify({ kind: "error", message: (err as Error).message }) + "\n"));
+        controller.enqueue(encoder.encode(JSON.stringify({ kind: "error", message: err instanceof Error ? err.message : String(err) }) + "\n"));
         controller.close();
       }
     },

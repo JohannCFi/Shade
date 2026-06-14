@@ -35,11 +35,10 @@ function priceFor(decimals: number): bigint {
 }
 
 /** Build the real-chain IO (funder index 0, transparent agent index 6). */
-function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses): TransparentRunIO {
+function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses, ticks: number): TransparentRunIO {
   const chain = resolveChain(opts.environment ?? "arc-testnet");
   const rpcUrl = opts.rpcUrl ?? chain.defaultRpc;
   const token = opts.token as `0x${string}`;
-  const ticks = clampTicks(opts.ticks);
   const price = priceFor(opts.tokenDecimals ?? 6);
 
   const funder = mnemonicToAccount(opts.mnemonic);
@@ -79,7 +78,7 @@ export async function* runTransparentAgentStream(
   const ticks = clampTicks(opts.ticks);
   const price = priceFor(opts.tokenDecimals ?? 6);
   const addrs = deriveSpyAddresses(opts.mnemonic);
-  const runner = io ?? makeRealIo(opts, addrs);
+  const runner = io ?? makeRealIo(opts, addrs, ticks);
   const explorerBase = resolveChain(opts.environment ?? "arc-testnet").viemChain.blockExplorers?.default?.url ?? FALLBACK_EXPLORER;
 
   yield { kind: "start", explorerBase };
