@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Nav } from "../_components/Hero";
+import { AgentLog } from "./_components/AgentLog";
+import { parseNdjsonLines } from "@/src/spy/ndjson";
+import type { RunEvent } from "@/src/spy/run-events";
 
 interface OracleUsage { oracle: string; label?: string; calls: number; totalSpent: string }
 interface SpyReport {
@@ -33,6 +36,9 @@ export default function SpyPage() {
   const [right, setRight] = useState<RailData>({ report: null, txs: [] });
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<string>("");
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [explorerBase, setExplorerBase] = useState("https://testnet.arcscan.app");
+  const [liveTick, setLiveTick] = useState<{ current: number; total: number } | null>(null);
 
   const refresh = useCallback(async () => {
     const [l, r] = await Promise.all([fetchRail("transparent"), fetchRail("unlink")]);
@@ -42,29 +48,49 @@ export default function SpyPage() {
   useEffect(() => { refresh(); }, [refresh]);
 
   async function runLive() {
+    const totalTicks = 3;
     setRunning(true);
-    setStatus("Sending real payments on Arc…");
+    setEvents([]);
+    setLiveTick({ current: 1, total: totalTicks });
+    setStatus("Streaming the agent's real payments on Arc…");
     try {
       const res = await fetch("/api/spy/run-transparent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticks: 3 }),
-      }).then((r) => r.json());
-      if (!res.ok) throw new Error(res.error ?? "run failed");
-      setStatus("Reading the chain…");
-      // poll the LEFT a few times as logs get indexed
-      for (let i = 0; i < 8; i++) {
-        const l = await fetchRail("transparent");
-        setLeft(l);
-        if (l.report?.readable && l.report.oracles.length >= 2) break;
-        await new Promise((r) => setTimeout(r, 4000));
+        body: JSON.stringify({ ticks: totalTicks }),
+      });
+      if (!res.body) throw new Error("no stream");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const parsed = parseNdjsonLines(buffer, decoder.decode(value, { stream: true }));
+        buffer = parsed.rest;
+        for (const raw of parsed.lines) {
+          const e = raw as RunEvent;
+          if (e.kind === "start") { setExplorerBase(e.explorerBase); continue; }
+          if (e.kind === "error") throw new Error(e.message);
+          setEvents((prev) => [...prev, e]);
+          if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
+          if (e.kind === "fund" || e.kind === "pay") {
+            // Each new hash → let the spy panels re-read the chain.
+            fetchRail("transparent").then(setLeft);
+            fetchRail("unlink").then(setRight);
+          }
+        }
       }
+
       await refresh();
-      setStatus("Done, the left was reconstructed from the chain; the right stayed dark.");
+      setStatus("Done — left reconstructed from the chain; right stayed dark.");
     } catch (e) {
       setStatus(`Failed: ${(e as Error).message}`);
     } finally {
       setRunning(false);
+      setLiveTick(null);
     }
   }
 
@@ -95,7 +121,11 @@ export default function SpyPage() {
           </div>
         </header>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-2">
+        <div className="mt-12">
+          <AgentLog events={events} explorerBase={explorerBase} running={running} tick={liveTick} />
+        </div>
+
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
           <SpyPanel
             tone="exposed"
             rail="x402, transparent"
