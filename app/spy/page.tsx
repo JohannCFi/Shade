@@ -52,6 +52,7 @@ export default function SpyPage() {
     const totalTicks = 3;
     setRunning(true);
     setEvents([]);
+    setVerify(null);
     setLiveTick({ current: 1, total: totalTicks });
     setStatus("Streaming the agent's real payments on Arc…");
     try {

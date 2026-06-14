@@ -40,7 +40,7 @@ export function AgentLog({ events, explorerBase, running, tick }: AgentLogProps)
           <ul className="space-y-0.5">
             {rows.map((e, i) => (
               <li key={rowKey(e, i)} className="grid grid-cols-[2.2rem_1fr_auto_8rem] items-baseline gap-3 border-b border-[var(--line)] py-1.5 font-mono text-xs last:border-0">
-                <span className="text-faint">t{("tick" in e ? e.tick : 0) + 1}</span>
+                <span className="text-faint">{"tick" in e ? `t${e.tick + 1}` : "init"}</span>
                 {e.kind === "decide" ? (
                   <>
                     <span className="text-ink">decide → {e.action}</span>
