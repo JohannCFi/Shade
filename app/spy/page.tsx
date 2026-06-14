@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Nav } from "../_components/Hero";
+import { AgentLog } from "./_components/AgentLog";
+import { parseNdjsonLines } from "@/src/spy/ndjson";
+import type { RunEvent } from "@/src/spy/run-events";
 
 interface OracleUsage { oracle: string; label?: string; calls: number; totalSpent: string }
 interface SpyReport {
@@ -18,9 +21,12 @@ interface RailData { report: SpyReport | null; txs: SpyTx[] }
 const usd = (atomic: string) => `${(Number(atomic) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`;
 const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
-async function fetchRail(rail: "transparent" | "unlink"): Promise<RailData> {
+type PrivateResult = { payments: number; sellersReceived: { label: string; amount: string }[] };
+
+async function fetchRail(rail: "transparent" | "unlink", address?: string | null): Promise<RailData> {
   try {
-    const r = await fetch(`/api/spy?rail=${rail}`, { cache: "no-store" });
+    const q = address ? `&address=${address}` : "";
+    const r = await fetch(`/api/spy?rail=${rail}${q}`, { cache: "no-store" });
     const j = await r.json();
     return { report: j.report ?? null, txs: j.txs ?? [] };
   } catch {
@@ -33,39 +39,100 @@ export default function SpyPage() {
   const [right, setRight] = useState<RailData>({ report: null, txs: [] });
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<string>("");
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [explorerBase, setExplorerBase] = useState("https://testnet.arcscan.app");
+  const [liveTick, setLiveTick] = useState<{ current: number; total: number } | null>(null);
+  const [verify, setVerify] = useState<string | null>(null);
+  const [agentAddr, setAgentAddr] = useState<string | null>(null);
+  const [privateResult, setPrivateResult] = useState<PrivateResult | null>(null);
+  const [ranOnce, setRanOnce] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [l, r] = await Promise.all([fetchRail("transparent"), fetchRail("unlink")]);
-    setLeft(l); setRight(r);
-  }, []);
+    const r = await fetchRail("unlink");
+    setRight(r);
+    setLeft(agentAddr ? await fetchRail("transparent", agentAddr) : { report: null, txs: [] });
+  }, [agentAddr]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  // On load only the (always-blind) right rail is read; the left starts empty and
+  // fills only once a run produces its ephemeral agent.
+  useEffect(() => { fetchRail("unlink").then(setRight); }, []);
 
   async function runLive() {
+    const totalTicks = 3;
     setRunning(true);
-    setStatus("Sending real payments on Arc…");
+    setEvents([]);
+    setVerify(null);
+    setPrivateResult(null);
+    setLeft({ report: null, txs: [] });
+    setLiveTick({ current: 1, total: totalTicks });
+    setStatus("Streaming the agent's real payments on Arc…");
+    let runAgent: string | null = null;
     try {
       const res = await fetch("/api/spy/run-transparent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticks: 3 }),
-      }).then((r) => r.json());
-      if (!res.ok) throw new Error(res.error ?? "run failed");
-      setStatus("Reading the chain…");
-      // poll the LEFT a few times as logs get indexed
-      for (let i = 0; i < 8; i++) {
-        const l = await fetchRail("transparent");
-        setLeft(l);
-        if (l.report?.readable && l.report.oracles.length >= 2) break;
-        await new Promise((r) => setTimeout(r, 4000));
+        body: JSON.stringify({ ticks: totalTicks }),
+      });
+      if (!res.body) throw new Error("no stream");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const parsed = parseNdjsonLines(buffer, decoder.decode(value, { stream: true }));
+          buffer = parsed.rest;
+          for (const raw of parsed.lines) {
+            const e = raw as RunEvent;
+            if (e.kind === "start") {
+              runAgent = e.agent;
+              setAgentAddr(e.agent);
+              setExplorerBase(e.explorerBase);
+              continue;
+            }
+            if (e.kind === "error") throw new Error(e.message);
+            if (e.kind === "private") { setPrivateResult({ payments: e.payments, sellersReceived: e.sellersReceived }); continue; }
+            setEvents((prev) => [...prev, e]);
+            if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
+            if (e.kind === "fund" || e.kind === "pay") {
+              // Each new hash → let the spy panels re-read the chain (left scoped to this run's agent).
+              fetchRail("transparent", runAgent).then(setLeft).catch(() => {});
+              fetchRail("unlink").then(setRight).catch(() => {});
+            }
+          }
+        }
+      } finally {
+        reader.cancel().catch(() => {});
       }
-      await refresh();
-      setStatus("Done, the left was reconstructed from the chain; the right stayed dark.");
+
+      setRight(await fetchRail("unlink"));
+      if (runAgent) setLeft(await fetchRail("transparent", runAgent));
+      setRanOnce(true);
+      setStatus("Done — left reconstructed from the chain; right stayed dark.");
     } catch (e) {
       setStatus(`Failed: ${(e as Error).message}`);
     } finally {
       setRunning(false);
+      setLiveTick(null);
     }
+  }
+
+  function verifyPrivate() {
+    if (!ranOnce) {
+      setVerify("Run the agent live first — then verify this run's private payments.");
+      return;
+    }
+    if (!privateResult) {
+      setVerify("Private rail unavailable this run — check the Unlink pool/engine.");
+      return;
+    }
+    const sellers = privateResult.sellersReceived.map((s) => `${s.label} ${s.amount}`).join(" · ");
+    setVerify(
+      `${privateResult.payments} private payments confirmed via the engine this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`,
+    );
   }
 
   return (
@@ -95,7 +162,11 @@ export default function SpyPage() {
           </div>
         </header>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-2">
+        <div className="mt-12">
+          <AgentLog events={events} explorerBase={explorerBase} running={running} tick={liveTick} />
+        </div>
+
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
           <SpyPanel
             tone="exposed"
             rail="x402, transparent"
@@ -109,6 +180,8 @@ export default function SpyPage() {
             subtitle="same agent, shielded"
             report={right.report}
             txs={right.txs}
+            onVerify={verifyPrivate}
+            verifyText={verify}
           />
         </div>
       </div>
@@ -116,12 +189,14 @@ export default function SpyPage() {
   );
 }
 
-function SpyPanel({ tone, rail, subtitle, report, txs }: {
+function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText }: {
   tone: "exposed" | "private";
   rail: string;
   subtitle: string;
   report: SpyReport | null;
   txs: SpyTx[];
+  onVerify?: () => void;
+  verifyText?: string | null;
 }) {
   const exposed = tone === "exposed";
   const readable = Boolean(report?.readable);
@@ -186,6 +261,13 @@ function SpyPanel({ tone, rail, subtitle, report, txs }: {
           <p className="mt-5 font-mono text-xs text-faint">
             No agent→oracle edges on-chain. Just noise.
           </p>
+        )}
+
+        {onVerify && (
+          <div className="mt-4 border-t border-[var(--line)] pt-4">
+            <button className="btn-ghost !py-1.5 !text-xs" onClick={onVerify}>✓ verify on engine</button>
+            {verifyText && <p className="mt-2 font-mono text-[0.7rem] text-faint">{verifyText}</p>}
+          </div>
         )}
       </div>
     </section>

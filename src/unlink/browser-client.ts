@@ -10,6 +10,7 @@ import {
 } from "@unlink-xyz/sdk/browser";
 import { buildDeriveSeedMessage } from "@unlink-xyz/sdk/crypto";
 import { resolveChain } from "../chain/chains.js";
+import { UNLINK_APP_ID } from "./app-id.js";
 
 /** Minimal structural shape of a Dynamic EVM wallet (what we use). */
 export interface DynamicEvmWallet {
@@ -18,8 +19,8 @@ export interface DynamicEvmWallet {
   getPublicClient(): Promise<unknown>;
 }
 
-/** App id bound into the Unlink identity derivation (keep stable). */
-export const UNLINK_APP_ID = "shade";
+/** Re-exported for existing browser importers; defined in a server-safe module. */
+export { UNLINK_APP_ID };
 
 /** Browser-safe config (NEXT_PUBLIC only — never import the strict server config here). */
 export const BROWSER_ENV = process.env.NEXT_PUBLIC_UNLINK_ENVIRONMENT ?? "arc-testnet";

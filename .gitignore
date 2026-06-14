@@ -34,3 +34,4 @@ yarn-error.log*
 # Misc
 coverage/
 .cache/
+.superpowers/
