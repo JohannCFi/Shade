@@ -82,6 +82,17 @@ export default function AppDashboard() {
     finally { setBusy(null); }
   }
 
+  async function onRefresh() {
+    if (!client) return;
+    setBusy("refresh"); setMsg("Reading your private activity…");
+    try {
+      await refreshBudget(client);
+      await refreshActivity(client);
+      setMsg("Activity refreshed.");
+    } catch (e) { setMsg(`Refresh failed: ${(e as Error).message}`); }
+    finally { setBusy(null); }
+  }
+
   async function onUnplug() {
     if (!client || Number(budget) <= 0) return;
     setBusy("unplug"); setMsg("Unplugging — withdrawing your full private budget…");
@@ -202,6 +213,14 @@ export default function AppDashboard() {
             </Card>
 
             <Card title="Activity (private, only you see it)">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="hint !mt-0">
+                  This panel doesn&apos;t auto-update — after your bot runs, click refresh to pull its new private payments.
+                </p>
+                <button className="btn-ghost shrink-0 !py-1.5 !text-xs" disabled={busy !== null} onClick={onRefresh}>
+                  {busy === "refresh" ? "Refreshing…" : "↻ Refresh"}
+                </button>
+              </div>
               {activity.length === 0 ? (
                 <p className="hint !mt-0">No private payments yet.</p>
               ) : (
