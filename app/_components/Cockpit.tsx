@@ -108,7 +108,7 @@ export function Sections() {
         </h2>
         <div className="reveal reveal-delay-1 relative mt-10 flex justify-center">
           <a
-            href="/flow"
+            href="/app"
             className="group inline-flex items-center gap-2 rounded-lg bg-ink px-6 py-3 text-sm font-medium text-bg transition hover:opacity-90"
           >
             Connect &amp; Become Invisible
