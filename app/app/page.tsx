@@ -142,6 +142,21 @@ export default function AppDashboard() {
         {/* STATE 3: cockpit */}
         {client && (
           <div className="mt-6 space-y-4">
+            {/* connected status + the key instruction */}
+            <div className="rounded-xl border border-[var(--line-2)] bg-[var(--bg-panel)] p-4">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ background: "#34d399", boxShadow: "0 0 8px #34d399", animation: "pulse-dot 2s infinite" }}
+                />
+                <span className="font-mono text-sm text-ink">Bot connected to Shade</span>
+              </div>
+              <p className="hint">
+                Run your bot as usual, with the same wallet. From now on its data payments
+                route automatically through your private Shade pool, invisible on-chain.
+              </p>
+            </div>
+
             <Card title="Bot identity">
               <KV k="Wallet" v={short(evmAddr)} />
               <KV k="Bot" v={`${unlinkAddr.slice(0, 22)}…`} />
