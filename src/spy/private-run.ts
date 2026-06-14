@@ -79,6 +79,15 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
     return BigInt(x?.amount ?? "0");
   };
 
+  // Keep the live demo reliable: if the agent's shielded pool can't cover this
+  // run, top it up from the owner's EVM wallet (deposit ~20 runs of buffer).
+  const agentAddr = await agentAccount.getAddress();
+  const needed = BigInt(price) * BigInt(opts.ticks) * 2n;
+  if ((await balanceOf(agentAddr)) < needed) {
+    const topUp = (needed * 20n).toString();
+    await (await client.depositWithApproval({ token, amount: topUp })).wait();
+  }
+
   const beforeEth = await balanceOf(ethSeller);
   const beforeBtc = await balanceOf(btcSeller);
 
