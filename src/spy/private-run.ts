@@ -10,8 +10,11 @@ import { buildDeriveSeedMessage } from "@unlink-xyz/sdk/crypto";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { resolveChain } from "../chain/chains.js";
+import { createNodeUnlinkContext } from "../unlink/node-client.js";
 import { UNLINK_APP_ID } from "../unlink/app-id.js";
 import { fromBaseUnits } from "../unlink/units.js";
+
+const FALLBACK_EXPLORER = "https://testnet.arcscan.app";
 
 export interface PrivateRunOpts {
   mnemonic: string;
@@ -26,6 +29,9 @@ export interface PrivateRunOpts {
 export interface PrivateRunResult {
   payments: number;
   sellersReceived: { label: string; amount: string }[];
+  /** Public on-chain withdrawals (the oracles cashing out the private value). */
+  withdrawals: { label: string; hash: string }[];
+  explorerBase: string;
 }
 
 /**
@@ -102,13 +108,41 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
 
   const afterEth = await balanceOf(ethSeller);
   const afterBtc = await balanceOf(btcSeller);
-  const delta = (after: bigint, before: bigint) => fromBaseUnits((after - before).toString(), decimals);
+  const ethDelta = afterEth - beforeEth;
+  const btcDelta = afterBtc - beforeBtc;
+  const explorerBase = chain.viemChain.blockExplorers?.default?.url ?? FALLBACK_EXPLORER;
+
+  // Trustless proof: each oracle cashes its just-received private balance OUT to
+  // its public address. Anyone can open the withdrawal tx on the explorer and see
+  // real USDC left the pool — without ever learning who paid. Best-effort per
+  // seller so a slow/failed withdrawal never sinks the run.
+  const withdrawals: { label: string; hash: string }[] = [];
+  for (const [label, accountIndex, amount] of [
+    ["ETH price", 2, ethDelta],
+    ["BTC signal", 3, btcDelta],
+  ] as const) {
+    if (amount <= 0n) continue;
+    try {
+      const seller = createNodeUnlinkContext(accountIndex);
+      const w = await seller.client.withdraw({
+        token,
+        amount: amount.toString(),
+        recipientEvmAddress: seller.evmAddress,
+      });
+      const r = await w.wait();
+      if (r.txHash) withdrawals.push({ label, hash: r.txHash });
+    } catch {
+      // proof unavailable for this seller — leave it out, the rest stands
+    }
+  }
 
   return {
     payments,
     sellersReceived: [
-      { label: "ETH price", amount: delta(afterEth, beforeEth) },
-      { label: "BTC signal", amount: delta(afterBtc, beforeBtc) },
+      { label: "ETH price", amount: fromBaseUnits(ethDelta.toString(), decimals) },
+      { label: "BTC signal", amount: fromBaseUnits(btcDelta.toString(), decimals) },
     ],
+    withdrawals,
+    explorerBase,
   };
 }

@@ -21,7 +21,12 @@ interface RailData { report: SpyReport | null; txs: SpyTx[] }
 const usd = (atomic: string) => `${(Number(atomic) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`;
 const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
-type PrivateResult = { payments: number; sellersReceived: { label: string; amount: string }[] };
+type PrivateResult = {
+  payments: number;
+  sellersReceived: { label: string; amount: string }[];
+  withdrawals: { label: string; hash: string }[];
+  explorerBase: string;
+};
 
 async function fetchRail(rail: "transparent" | "unlink", address?: string | null): Promise<RailData> {
   try {
@@ -43,6 +48,7 @@ export default function SpyPage() {
   const [explorerBase, setExplorerBase] = useState("https://testnet.arcscan.app");
   const [liveTick, setLiveTick] = useState<{ current: number; total: number } | null>(null);
   const [verify, setVerify] = useState<string | null>(null);
+  const [verifyLinks, setVerifyLinks] = useState<{ label: string; url: string }[]>([]);
   const [agentAddr, setAgentAddr] = useState<string | null>(null);
   const [privateResult, setPrivateResult] = useState<PrivateResult | null>(null);
   const [ranOnce, setRanOnce] = useState(false);
@@ -62,6 +68,7 @@ export default function SpyPage() {
     setRunning(true);
     setEvents([]);
     setVerify(null);
+    setVerifyLinks([]);
     setPrivateResult(null);
     setLeft({ report: null, txs: [] });
     setLiveTick({ current: 1, total: totalTicks });
@@ -94,7 +101,15 @@ export default function SpyPage() {
               continue;
             }
             if (e.kind === "error") throw new Error(e.message);
-            if (e.kind === "private") { setPrivateResult({ payments: e.payments, sellersReceived: e.sellersReceived }); continue; }
+            if (e.kind === "private") {
+              setPrivateResult({
+                payments: e.payments,
+                sellersReceived: e.sellersReceived,
+                withdrawals: e.withdrawals,
+                explorerBase: e.explorerBase,
+              });
+              continue;
+            }
             setEvents((prev) => [...prev, e]);
             if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
             if (e.kind === "fund" || e.kind === "pay") {
@@ -123,15 +138,23 @@ export default function SpyPage() {
   function verifyPrivate() {
     if (!ranOnce) {
       setVerify("Run the agent live first — then verify this run's private payments.");
+      setVerifyLinks([]);
       return;
     }
     if (!privateResult) {
       setVerify("Private rail unavailable this run — check the Unlink pool/engine.");
+      setVerifyLinks([]);
       return;
     }
     const sellers = privateResult.sellersReceived.map((s) => `${s.label} ${s.amount}`).join(" · ");
     setVerify(
-      `${privateResult.payments} private payments confirmed via the engine this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`,
+      `${privateResult.payments} private payments confirmed this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`,
+    );
+    setVerifyLinks(
+      privateResult.withdrawals.map((w) => ({
+        label: `${w.label} cashed out → public`,
+        url: `${privateResult.explorerBase}/tx/${w.hash}`,
+      })),
     );
   }
 
@@ -182,6 +205,7 @@ export default function SpyPage() {
             txs={right.txs}
             onVerify={verifyPrivate}
             verifyText={verify}
+            verifyLinks={verifyLinks}
           />
         </div>
       </div>
@@ -189,7 +213,7 @@ export default function SpyPage() {
   );
 }
 
-function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText }: {
+function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText, verifyLinks }: {
   tone: "exposed" | "private";
   rail: string;
   subtitle: string;
@@ -197,6 +221,7 @@ function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText }: {
   txs: SpyTx[];
   onVerify?: () => void;
   verifyText?: string | null;
+  verifyLinks?: { label: string; url: string }[];
 }) {
   const exposed = tone === "exposed";
   const readable = Boolean(report?.readable);
@@ -267,6 +292,23 @@ function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText }: {
           <div className="mt-4 border-t border-[var(--line)] pt-4">
             <button className="btn-ghost !py-1.5 !text-xs" onClick={onVerify}>✓ verify on engine</button>
             {verifyText && <p className="mt-2 font-mono text-[0.7rem] text-faint">{verifyText}</p>}
+            {verifyLinks && verifyLinks.length > 0 && (
+              <ul className="mt-2 space-y-0.5">
+                {verifyLinks.map((l, i) => (
+                  <li key={`${l.url}-${i}`}>
+                    <a
+                      href={l.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-3 rounded px-1.5 py-1 font-mono text-[0.7rem] text-[#7da7c7] transition hover:bg-[var(--bg)] hover:underline"
+                    >
+                      <span className="uppercase tracking-wider">{l.label}</span>
+                      <span className="opacity-80">arcscan ↗</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

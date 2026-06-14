@@ -10,6 +10,13 @@ export type RunEvent =
   | { kind: "fund"; hash: `0x${string}` }
   | { kind: "pay"; tick: number; oracle: "ETH" | "BTC"; amount: string; hash: `0x${string}` }
   | { kind: "decide"; tick: number; action: Action; ethPrice: number; btcSignal: BtcSignal }
-  | { kind: "private"; payments: number; sellersReceived: { label: string; amount: string }[] }
+  | {
+      kind: "private";
+      payments: number;
+      sellersReceived: { label: string; amount: string }[];
+      /** Public on-chain withdrawals proving the private value really landed. */
+      withdrawals: { label: string; hash: string }[];
+      explorerBase: string;
+    }
   | { kind: "done"; agent: `0x${string}` }
   | { kind: "error"; message: string };

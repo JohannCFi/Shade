@@ -58,7 +58,13 @@ export async function POST(request: Request): Promise<Response> {
           ticks,
           tokenDecimals,
         });
-        yield { kind: "private", payments: priv.payments, sellersReceived: priv.sellersReceived };
+        yield {
+          kind: "private",
+          payments: priv.payments,
+          sellersReceived: priv.sellersReceived,
+          withdrawals: priv.withdrawals,
+          explorerBase: priv.explorerBase,
+        };
       } catch {
         // private proof unavailable — leave it out, the rest of the demo stands
       }
