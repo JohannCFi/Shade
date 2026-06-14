@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Nav } from "../_components/Hero";
 import { AgentLog } from "./_components/AgentLog";
 import { parseNdjsonLines } from "@/src/spy/ndjson";
@@ -52,12 +52,6 @@ export default function SpyPage() {
   const [agentAddr, setAgentAddr] = useState<string | null>(null);
   const [privateResult, setPrivateResult] = useState<PrivateResult | null>(null);
   const [ranOnce, setRanOnce] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const r = await fetchRail("unlink");
-    setRight(r);
-    setLeft(agentAddr ? await fetchRail("transparent", agentAddr) : { report: null, txs: [] });
-  }, [agentAddr]);
 
   // On load only the (always-blind) right rail is read; the left starts empty and
   // fills only once a run produces its ephemeral agent.
@@ -180,7 +174,6 @@ export default function SpyPage() {
             <button className="btn" disabled={running} onClick={runLive}>
               {running ? "Running live…" : "▶ Run agent live"}
             </button>
-            <button className="btn-ghost" disabled={running} onClick={refresh}>Refresh from chain</button>
             {status && <span className="hint !mt-0">{status}</span>}
           </div>
         </header>
