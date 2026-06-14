@@ -9,6 +9,18 @@ import { account as unlinkAccount } from "@unlink-xyz/sdk/client";
  * and a freshness proof (a timestamped message). The backend verifies both and
  * issues Unlink tokens only for the proven address. No admin key, no DB.
  */
+
+/** Returns true only when `url` shares the exact origin and path-prefix of `apiUrl`. */
+function isShadeApiUrl(url: string, apiUrl: string): boolean {
+  try {
+    const u = new URL(url);
+    const a = new URL(apiUrl);
+    return u.origin === a.origin && u.pathname.startsWith(a.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export const SHADE_AUTH_SCHEME = "ShadeSig";
 export const DEFAULT_MAX_AGE_MS = 120_000;
 
@@ -40,7 +52,7 @@ export function decodeShadeAuth(header: string | null): ShadeAuthPayload | null 
     const json = Buffer.from(header.slice(SHADE_AUTH_SCHEME.length + 1), "base64").toString("utf8");
     const p = JSON.parse(json) as ShadeAuthPayload;
     if (typeof p?.deriveSig === "string" && typeof p?.unlinkAddress === "string" &&
-        typeof p?.ts === "number" && typeof p?.liveSig === "string") return p;
+        typeof p?.ts === "number" && Number.isFinite(p.ts) && typeof p?.liveSig === "string") return p;
     return null;
   } catch {
     return null;
@@ -68,7 +80,8 @@ export async function verifyShadeAuth(
 ): Promise<{ unlinkAddress: string } | null> {
   const maxAge = opts.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const now = opts.now ?? Date.now();
-  if (!Number.isFinite(payload.ts) || Math.abs(now - payload.ts) > maxAge) return null;
+  const skewMs = 5_000;
+  if (!Number.isFinite(payload.ts) || payload.ts - now > skewMs || now - payload.ts > maxAge) return null;
 
   let signer1: string;
   let derived: string;
@@ -86,6 +99,7 @@ export async function verifyShadeAuth(
   } catch {
     return null;
   }
+  if (!signer1 || !signer2) return null;
   if (signer1.toLowerCase() !== signer2.toLowerCase()) return null;
 
   return { unlinkAddress: payload.unlinkAddress };
@@ -103,8 +117,8 @@ export function makeAuthInjectingFetch(
 ): typeof globalThis.fetch {
   return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
-    if (url.startsWith(apiUrl)) {
-      const headers = new Headers(init?.headers);
+    if (isShadeApiUrl(url, apiUrl)) {
+      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
       headers.set("Authorization", await authHeader());
       return baseFetch(input, { ...init, headers });
     }

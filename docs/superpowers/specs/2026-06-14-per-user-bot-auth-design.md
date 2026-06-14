@@ -50,7 +50,7 @@ derives the address, and only issues tokens for **that** address.
 
 **New: `src/unlink/bot-auth.ts`** (pure, unit-tested)
 - `buildShadeAuthHeader({ deriveSig, unlinkAddress, ts, liveSig }) → string` and
-  `parseShadeAuthHeader(header) → payload | null` — the wire format.
+  `decodeShadeAuth(header) → payload | null` — the wire format.
 - `verifyShadeAuth(payload, { appId, chainId, maxAgeMs }) → { unlinkAddress } | null`
   — recovers both signers, checks they match, re-derives the address, checks the
   timestamp. **No I/O** → fully testable with fixed signatures.

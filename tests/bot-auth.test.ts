@@ -50,6 +50,10 @@ describe("verifyShadeAuth", () => {
     const liveSig = await mnemonicToAccount(OTHER).signMessage({ message: liveMessage(p.unlinkAddress, p.ts) });
     expect(await verifyShadeAuth({ ...p, liveSig }, { appId: APP_ID, chainId: CHAIN_ID })).toBeNull();
   });
+  it("rejects a future timestamp beyond clock-skew tolerance", async () => {
+    const p = await payload(Date.now() + 130_000);
+    expect(await verifyShadeAuth(p, { appId: APP_ID, chainId: CHAIN_ID })).toBeNull();
+  });
 });
 
 describe("buildShadeAuthHeader", () => {
