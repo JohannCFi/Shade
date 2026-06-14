@@ -30,7 +30,6 @@ export default function AppDashboard() {
   const [activity, setActivity] = useState<Tx[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
-  const [unplugged, setUnplugged] = useState(false);
 
   async function refreshBudget(c: UnlinkClient): Promise<string> {
     const { balances } = await c.getBalances({ token: BROWSER_TOKEN });
@@ -78,8 +77,7 @@ export default function AppDashboard() {
       await (await client.depositWithApproval({ token: BROWSER_TOKEN, amount: toToken(fundAmount) })).wait();
       const nb = await refreshBudget(client);
       await refreshActivity(client);
-      setUnplugged(false);
-      setMsg(`Funded. Private budget: ${nb} USDC.`);
+      setMsg(`Plugged in. Private budget: ${nb} USDC.`);
     } catch (e) { setMsg(`Fund failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
   }
@@ -91,7 +89,6 @@ export default function AppDashboard() {
       await (await client.withdraw({ token: BROWSER_TOKEN, amount: toToken(budget), recipientEvmAddress: evmAddr })).wait();
       await refreshBudget(client);
       await refreshActivity(client);
-      setUnplugged(true);
       setMsg("Bot unplugged. Budget withdrawn to your wallet, it can no longer pay.");
     } catch (e) { setMsg(`Unplug failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
@@ -151,19 +148,19 @@ export default function AppDashboard() {
                 <span
                   className="inline-block h-2 w-2 rounded-full"
                   style={
-                    unplugged
-                      ? { background: "#ef4444", boxShadow: "0 0 8px #ef4444" }
-                      : { background: "#34d399", boxShadow: "0 0 8px #34d399", animation: "pulse-dot 2s infinite" }
+                    Number(budget) > 0
+                      ? { background: "#34d399", boxShadow: "0 0 8px #34d399", animation: "pulse-dot 2s infinite" }
+                      : { background: "#ef4444", boxShadow: "0 0 8px #ef4444" }
                   }
                 />
                 <span className="font-mono text-sm text-ink">
-                  {unplugged ? "Bot disconnected" : "Bot connected to Shade"}
+                  {Number(budget) > 0 ? "Bot connected to Shade" : "Bot disconnected"}
                 </span>
               </div>
               <p className="hint">
-                {unplugged
-                  ? "Budget withdrawn to your wallet, your bot can no longer pay. Fund it again to reconnect."
-                  : "Run your bot as usual, with the same wallet. From now on its data payments route automatically through your private Shade pool, invisible on-chain."}
+                {Number(budget) > 0
+                  ? "Your bot is plugged in. Run it as usual with the same wallet, its data payments now route automatically through your private Shade pool, invisible on-chain. Unplug to withdraw your funds anytime."
+                  : "Fund a private budget to plug your bot in. Once plugged, run your bot as usual and its data payments route privately through Shade."}
               </p>
             </div>
 
@@ -180,13 +177,13 @@ export default function AppDashboard() {
                 <input className="input" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} inputMode="decimal" placeholder="amount" />
                 <span className="font-mono text-sm text-muted">USDC</span>
                 <button className="btn" disabled={busy !== null || !fundAmount} onClick={onFund}>
-                  {busy === "fund" ? "Funding…" : "Fund private budget"}
+                  {busy === "fund" ? "Plugging in…" : Number(budget) > 0 ? "Add funds" : "Plug in (fund)"}
                 </button>
                 <button className="btn-ghost" disabled={busy !== null || Number(budget) <= 0} onClick={onUnplug}>
-                  {busy === "unplug" ? "Unplugging…" : "Unplug bot"}
+                  {busy === "unplug" ? "Unplugging…" : "Unplug (withdraw all)"}
                 </button>
               </div>
-              <p className="hint">Default is ~your whole wallet (a gas reserve is kept). Unplug withdraws it all back, the bot can no longer pay.</p>
+              <p className="hint">Funding plugs your bot in (deposits into your private pool). Default is ~your whole wallet, a gas reserve is kept. Unplug withdraws it all back anytime, the bot can no longer pay.</p>
             </Card>
 
             <Card title="Connect your external bot">
