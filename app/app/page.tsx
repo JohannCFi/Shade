@@ -99,7 +99,15 @@ export default function AppDashboard() {
       {/* minimal app shell: logo only */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-[var(--line)] bg-[rgba(8,8,10,0.72)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3.5">
-          <a href="/" className="text-[0.95rem] font-semibold tracking-tight text-ink">Shade</a>
+          <a href="/" className="flex items-center gap-2.5">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-ink">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="8" cy="12" r="5.4" stroke="#08080a" strokeWidth="3.2" />
+                <path d="M12.6 12H21v3.2M16.6 12v3.2" stroke="#08080a" strokeWidth="3.2" strokeLinecap="square" />
+              </svg>
+            </span>
+            <span className="text-[0.95rem] font-semibold tracking-tight text-ink">Shade</span>
+          </a>
           {connected && (
             <button className="btn-ghost" onClick={() => handleLogOut()}>Disconnect wallet</button>
           )}
