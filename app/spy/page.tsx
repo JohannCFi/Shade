@@ -39,6 +39,7 @@ export default function SpyPage() {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [explorerBase, setExplorerBase] = useState("https://testnet.arcscan.app");
   const [liveTick, setLiveTick] = useState<{ current: number; total: number } | null>(null);
+  const [verify, setVerify] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [l, r] = await Promise.all([fetchRail("transparent"), fetchRail("unlink")]);
@@ -94,6 +95,18 @@ export default function SpyPage() {
     }
   }
 
+  async function verifyPrivate() {
+    setVerify("Checking the Unlink engine…");
+    try {
+      const j = await fetch("/api/spy/verify-private", { cache: "no-store" }).then((r) => r.json());
+      if (!j.ok) { setVerify("Engine unavailable — run the agent on the private rail first."); return; }
+      const sellers = (j.sellersReceived as { label: string; amount: string }[]).map((s) => `${s.label} ${s.amount}`).join(" · ");
+      setVerify(`${j.agentTxCount} private payments confirmed via the engine — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`);
+    } catch (e) {
+      setVerify(`Engine error: ${(e as Error).message}`);
+    }
+  }
+
   return (
     <main className="grain min-h-screen bg-bg">
       <Nav />
@@ -139,6 +152,8 @@ export default function SpyPage() {
             subtitle="same agent, shielded"
             report={right.report}
             txs={right.txs}
+            onVerify={verifyPrivate}
+            verifyText={verify}
           />
         </div>
       </div>
@@ -146,12 +161,14 @@ export default function SpyPage() {
   );
 }
 
-function SpyPanel({ tone, rail, subtitle, report, txs }: {
+function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText }: {
   tone: "exposed" | "private";
   rail: string;
   subtitle: string;
   report: SpyReport | null;
   txs: SpyTx[];
+  onVerify?: () => void;
+  verifyText?: string | null;
 }) {
   const exposed = tone === "exposed";
   const readable = Boolean(report?.readable);
@@ -216,6 +233,13 @@ function SpyPanel({ tone, rail, subtitle, report, txs }: {
           <p className="mt-5 font-mono text-xs text-faint">
             No agent→oracle edges on-chain. Just noise.
           </p>
+        )}
+
+        {onVerify && (
+          <div className="mt-4 border-t border-[var(--line)] pt-4">
+            <button className="btn-ghost !py-1.5 !text-xs" onClick={onVerify}>✓ verify on engine</button>
+            {verifyText && <p className="mt-2 font-mono text-[0.7rem] text-faint">{verifyText}</p>}
+          </div>
         )}
       </div>
     </section>
