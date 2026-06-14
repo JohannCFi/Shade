@@ -4,7 +4,7 @@ import { account as unlinkAccount } from "@unlink-xyz/sdk/client";
 import { buildDeriveSeedMessage } from "@unlink-xyz/sdk/crypto";
 import { mnemonicToAccount } from "viem/accounts";
 import { config } from "@/src/unlink/config";
-import { UNLINK_APP_ID } from "@/src/unlink/browser-client";
+import { UNLINK_APP_ID } from "@/src/unlink/app-id";
 import { summarizePrivateActivity } from "@/src/spy/private-activity";
 
 export const dynamic = "force-dynamic";
