@@ -21,7 +21,7 @@ export function Nav() {
             Live demo
           </a>
           <a
-            href="/flow"
+            href="/app"
             className="rounded-lg bg-ink px-3.5 py-1.5 text-sm font-medium text-bg transition hover:opacity-90"
           >
             Launch app
@@ -63,7 +63,7 @@ export function Hero() {
           style={{ animationDelay: "0.2s" }}
         >
           <a
-            href="/flow"
+            href="/app"
             className="group inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-bg transition hover:opacity-90"
           >
             Connect &amp; Become Invisible
