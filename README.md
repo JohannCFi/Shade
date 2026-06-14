@@ -97,3 +97,6 @@ await shade.payPrivate(oracleAddress, "0.001"); // private, invisible on-chain
 The bot signs a stateless proof (`ShadeSig`); the backend verifies it and issues
 Unlink tokens **scoped to that wallet's address only**. Test locally:
 `SHADE_API_URL=http://localhost:3001 npx tsx scripts/my-bot.ts --ticks 2`.
+
+**Integrating Shade into an existing bot?** See `docs/INTEGRATION.md` — 3 steps,
+a before/after diff, and the one caveat (your data provider must accept Unlink).
