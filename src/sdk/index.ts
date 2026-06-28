@@ -72,6 +72,7 @@ export class ShadeAgent {
   private readonly decimals: number;
   private readonly chainId: number;
   private readonly apiUrl?: string;
+  private readonly rpcUrl: string;
   private readonly evmSigner: ReturnType<typeof privateKeyToAccount> | ReturnType<typeof mnemonicToAccount>;
   private readonly evmProvider: ReturnType<typeof evm.fromViem>;
   private _client: UnlinkClient | null = null;
@@ -90,6 +91,7 @@ export class ShadeAgent {
     this.chainId = chain.chainId;
     this.apiUrl = cfg.apiUrl;
     const rpcUrl = cfg.rpcUrl ?? chain.defaultRpc;
+    this.rpcUrl = rpcUrl;
 
     this.evmSigner = cfg.privateKey
       ? privateKeyToAccount(cfg.privateKey as `0x${string}`)
@@ -201,6 +203,32 @@ export class ShadeAgent {
       recipientEvmAddress,
     });
     await tx.wait();
+  }
+
+  /**
+   * Run a private DeFi action (swap / vault4626 / aaveSupply) by registry id.
+   * Withdraws `amountHuman` of the configured token from the private budget into a
+   * fresh ExecutionAccount, runs the atomic batch, and deposits the result token
+   * back into the private pool. The bot identity (fromEthereumSignature) is
+   * seed-backed, so execute() works here exactly as in the CLI path.
+   */
+  async runDefi(registryId: string, amountHuman: string, opts: { slippageBps?: number } = {}) {
+    await this.ready();
+    const { runPrivateDefi } = await import("../defi/run.js");
+    const publicClient = createPublicClient({
+      chain: resolveChain(this.environment).viemChain,
+      transport: http(this.rpcUrl),
+    });
+    return runPrivateDefi(
+      this.client as unknown as Parameters<typeof runPrivateDefi>[0],
+      publicClient as unknown as Parameters<typeof runPrivateDefi>[1],
+      registryId,
+      {
+        token: this.token as `0x${string}`,
+        amount: BigInt(toBaseUnits(amountHuman, this.decimals)),
+        slippageBps: opts.slippageBps ?? 50,
+      },
+    );
   }
 }
 
