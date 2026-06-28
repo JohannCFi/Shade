@@ -101,10 +101,15 @@ Spec: `docs/superpowers/specs/2026-06-14-per-user-bot-auth-design.md`.
 ## 8. Honest scope
 
 - **Real:** private payments for agent data (Unlink), Circle x402 settlement of the
-  transparent rail, Dynamic onboarding, the per-user auth, the two-bot isolation.
-- **Out of scope (by design):** real DEX trade execution (Shade protects *paying for
-  data + the strategy*, not order execution); a nonce store for the auth replay
-  window (testnet-acceptable as-is); headless bots for embedded-wallet users
+  transparent rail, Dynamic onboarding, the per-user auth, the two-bot isolation, and
+  **private DeFi execution** — vault deposit / swap / lending supply via Unlink
+  `execute()` (fresh ExecutionAccount → `depositBack`, confirmed on-chain).
+- **Mocked (demo only):** the DeFi venues are mock contracts on Arc testnet (gateless
+  ERC-4626 vault, Uniswap-v3-shaped router/quoter, Aave-shaped pool) — the mechanism is
+  real, the protocols behind it are stand-ins (Arc is too new for third-party DeFi).
+- **Out of scope (by design):** non-tokenized / non-EVM strategies (Aave **borrow**,
+  perps like Hyperliquid/GMX); a nonce store for the auth replay window
+  (testnet-acceptable as-is); headless bots for embedded-wallet users
   (self-custody only — an industry-wide custody constraint, not a Shade limit).
 
 ## 9. Tech stack

@@ -19,17 +19,28 @@ pattern). With bare on-chain payments, every purchase is a footprint: a competit
 indexing the chain reconstructs **which oracles it queries, how often, its remaining
 budget, and the wallet that funds it** — its entire strategy, for free.
 
+The agent also **acts on its signals** — after reading the oracles it allocates capital
+into DeFi venues (a yield vault, a DEX swap, a lending supply). That execution is the
+second footprint: a competitor sees not just *which signals* it follows but *what it
+does with its money*.
+
 Shade runs the **same agent over two rails** and makes the difference visible:
 
-- **Transparent rail** — pay-per-call settles on-chain (Circle x402). A "spy" indexer
-  rebuilds funder, oracles, budget and strategy.
+- **Transparent rail** — pay-per-call settles on-chain (Circle x402) and the agent's
+  trades fire from its own address. A "spy" indexer rebuilds funder, oracles, budget,
+  strategy **and the capital allocation** (which venues, how much).
 - **Private rail (Unlink)** — the agent pays each oracle through Unlink private
-  accounts; funding and spending are decoupled inside a privacy pool. The spy sees
-  **only noise**.
+  accounts, **and runs each DeFi allocation through `execute()`** via a fresh
+  ExecutionAccount. Funding, spending and execution are decoupled inside a privacy pool.
+  The spy sees **only noise** — no agent→venue edge, no link between actions.
 
 The split-screen demo at **`/spy`** turns that contrast into the pitch: press *Run
-agent live*, watch real transactions stream, watch the left panel reconstruct
-everything and the right stay dark.
+agent live*, watch real transactions stream (oracle queries **+ three capital
+allocations**), watch the left panel reconstruct everything and the right stay dark.
+
+> What "invisible" means here: the DeFi action still lands on-chain (through an ephemeral
+> ExecutionAccount), but it can't be tied to the agent, to its other actions, or to the
+> signals behind it. Shade hides the **actor and the playbook**, not the existence of a tx.
 
 ---
 
@@ -76,13 +87,15 @@ everything and the right stay dark.
 ### What is private vs. public
 | | On the chain a competitor sees |
 |---|---|
-| **Transparent rail (Circle x402)** | funder → agent, agent → each oracle, amounts, cadence → **strategy reconstructable** |
-| **Private rail (Unlink)** | only an opaque pool. **Funder, oracles, amounts, budget and strategy are hidden.** |
+| **Transparent rail (Circle x402)** | funder → agent, agent → each oracle, amounts, cadence, **agent → each DeFi venue** → **strategy + execution reconstructable** |
+| **Private rail (Unlink)** | only an opaque pool + anonymous, unlinkable ExecutionAccounts. **Funder, oracles, amounts, budget, strategy and capital allocation are hidden.** |
 
 What stays private with Shade: the agent's **funding source, which data it buys, how
-much, how often, and the strategy** those payments imply. What's still publicly
-verifiable (by design): that *some* value entered/left the pool (deposits and the proof
-withdrawal) — never *who paid whom*.
+much, how often, the strategy** those payments imply, **and the capital allocation** it
+executes (vault / swap / lending — run through fresh ExecutionAccounts). What's still
+publicly verifiable (by design): that *some* value entered/left the pool, and that *some*
+anonymous ExecutionAccount touched a venue — never *who*, and never the links between
+them.
 
 ---
 
@@ -154,7 +167,13 @@ Next.js (App Router) · TypeScript · viem · `@dynamic-labs/*` · `@unlink-xyz/
 `@circle-fin/x402-batching` · vitest · Arc Testnet.
 
 - **Real:** private payments for agent data (Unlink), Circle x402 batched settlement,
-  Dynamic onboarding + identity derivation, per-user bot auth, two-wallet isolation.
-- **Out of scope (by design):** real DEX trade execution (Shade protects *paying for
-  data + the strategy*, not order execution); a nonce store for the auth replay window
-  (testnet-acceptable); headless bots for embedded-wallet users (self-custody only).
+  Dynamic onboarding + identity derivation, per-user bot auth, two-wallet isolation, and
+  **private DeFi execution** — vault deposit / swap / lending supply via Unlink
+  `execute()` (fresh ExecutionAccount → `depositBack`, `status: completed` on-chain).
+- **Mocked (demo only):** the DeFi **venues** are mock contracts on Arc testnet (gateless
+  ERC-4626 vault, Uniswap-v3-shaped router/quoter, Aave-shaped pool) — Arc is too new for
+  third-party DeFi; the *mechanism* is real, only the protocols behind it are stand-ins.
+- **Out of scope (by design):** non-tokenized / non-EVM strategies (Aave **borrow**, perps
+  like Hyperliquid/GMX — public position or no ERC-20 to deposit back); a nonce store for
+  the auth replay window (testnet-acceptable); headless bots for embedded-wallet users
+  (self-custody only).

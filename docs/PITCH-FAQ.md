@@ -77,8 +77,22 @@ revealing the payer**.
 
 **Q: What specifically is private?**
 The funding source, which oracles the agent queries, the amounts, the frequency, the
-budget, and the strategy those payments imply. What stays public (by design): that
-*some* value entered/left the pool — never *who paid whom*.
+budget, the strategy those payments imply — **and now the agent's capital allocation**:
+the vault deposits, DEX swaps and lending supplies it makes acting on its signals. What
+stays public (by design): that *some* value entered/left the pool, and that *some*
+anonymous ExecutionAccount touched a venue — never *who*, and never the links between
+them.
+
+**Q: You said you also hide the trades now — how, and what exactly is hidden?**
+After the ticks, the demo agent allocates capital into three venues (yield vault, DEX
+swap, lending supply). On the transparent rail those are plain `agent → venue` transfers
+the spy reconstructs ("deploys capital into …"). On the private rail the *same* three
+actions run through Unlink **`execute()`**: each withdraws from the private pool into a
+**fresh ExecutionAccount** (ERC-4337, gas sponsored), runs the batch, and deposits the
+result back. Honest framing — the on-chain action still exists; what's hidden is the
+**link**: identity↔action (the account isn't tied to the agent), action↔action (each is
+a fresh account), and signals↔execution (the strategy graph). We hide the actor and the
+playbook, not the existence of a tx.
 
 **Q: Where does the admin key live? Isn't handing it to bots a problem?**
 The Unlink admin key stays **server-side only**. Bots authenticate with a **stateless
@@ -118,10 +132,17 @@ for testnet/MVP. A nonce/challenge store (e.g. Vercel KV) removes the window ent
 noted as future hardening.
 
 **Q: What's mocked / out of scope?**
-Real DEX trade execution (Shade protects *paying for data + the strategy*, not order
-execution); the nonce store above; headless bots for **embedded-wallet** users (they
-can't export a key — self-custody only, an industry-wide custody constraint).
+The DeFi **venues** in the demo are mock contracts on Arc testnet (a gateless ERC-4626
+vault, a Uniswap-v3-shaped router/quoter, an Aave-shaped pool) — stand-ins with a 1:1
+rate, because Arc is too new for third-party DeFi. The **private-execution mechanism is
+real** (`execute()` → fresh ExecutionAccount → `depositBack`, `status: completed`
+on-chain); only the protocols behind it are mocked. Still genuinely out of scope:
+non-tokenized/non-EVM strategies (Aave **borrow**, perps like Hyperliquid/GMX — public
+position or no ERC-20 to deposit back); the nonce store above; headless bots for
+**embedded-wallet** users (self-custody only).
 
 **Q: What's the killer demo in 20 seconds?**
-`/spy` → Run agent live → left rail reconstructs the whole strategy, right rail stays
-dark — same agent, identical activity, one is readable and one is invisible.
+`/spy` → Run agent live → the agent queries its oracles **and allocates capital** into a
+vault, a swap and a lending supply. Left rail reconstructs the whole playbook (signals +
+"deploys capital into …"); right rail stays dark — same agent, identical activity, one
+is fully readable and one is invisible.
