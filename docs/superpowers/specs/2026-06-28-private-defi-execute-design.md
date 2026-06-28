@@ -32,6 +32,12 @@ requested token and amount in the ExecutionAccount."* Conséquences :
   slippage (`preview.ts`), et on dépose ce minimum. Le reliquat (dust = sortie
   réelle − minOut) reste dans l'ExecutionAccount (balayage = hors scope).
 - Le batch doit **approuver Permit2** sur le token résultat avant le deposit-back.
+  ⚠️ Permit2 a **deux couches d'allowance** : (a) ERC-20 `approve(PERMIT2, max)`
+  sur le token résultat, et potentiellement (b) `Permit2.approve(token, spender,
+  amount, expiration)`. **À pinner contre le SDK avant impl** : déterminer si le
+  deposit-back Unlink consomme l'allowance ERC-20→Permit2 seule, ou exige aussi la
+  couche interne Permit2. Cela fixe le nombre de calls du batch (et donc la marge
+  vs le plafond de 16).
 
 `client.execute()` — paramètres confirmés :
 - requis : `token` (ERC-20 retiré), `amount` (base units), `calls` (1–16).
@@ -76,6 +82,8 @@ ERC-20 fongible → redéposable dans la pool. C'est le critère du scope.
 ## 4. Interfaces (`src/defi/types.ts`)
 
 ```ts
+import type { PublicClient } from "viem";
+
 export type PrimitiveKind = "swap" | "vault4626" | "aaveSupply";
 
 export interface EvmCall {
@@ -89,19 +97,37 @@ export interface BuildContext {
   execAccount: `0x${string}`; // recipient = ExecutionAccount réservé
   token: `0x${string}`;       // token d'entrée retiré du solde privé
   amount: bigint;             // base units
-  slippageBps: number;        // marge pour le minOut du depositBack
+  slippageBps: number;        // SOURCE UNIQUE de la marge (voir précédence ci-dessous)
+  minOut: bigint;             // calculé par previewMin AVANT buildCalls (résout l'ordre circulaire)
 }
 
 export interface PrimitiveAdapter<Cfg> {
   kind: PrimitiveKind;
-  /** batch ordonné pour execute() (inclut approves + approve Permit2 resultToken) */
+  /** montant prudent (preview on-chain + slippage). Appelé EN PREMIER par le runner. */
+  previewMin(cfg: Cfg, ctx: Omit<BuildContext, "minOut">, publicClient: PublicClient): Promise<bigint>;
+  /** batch ordonné pour execute() (approves + action recipient=EA + approve Permit2 resultToken).
+   *  Utilise ctx.minOut pour amountOutMinimum (swap). Synchrone : tout est déjà connu. */
   buildCalls(cfg: Cfg, ctx: BuildContext): EvmCall[];
   /** adresse du token résultat redéposable */
   resultToken(cfg: Cfg, ctx: BuildContext): `0x${string}`;
-  /** montant prudent à passer en depositBack.amount (preview on-chain + slippage) */
-  previewMin(cfg: Cfg, ctx: BuildContext, publicClient): Promise<bigint>;
 }
 ```
+
+**Ordre imposé (résout l'issue circulaire) :** le runner appelle `previewMin`
+d'abord, injecte `minOut` dans `BuildContext`, puis `buildCalls`. Ainsi le swap
+peut poser `amountOutMinimum = ctx.minOut`, et c'est **le même `minOut`** qui sert
+de `depositBack.amount` → garantit `amountOutMinimum ≥ depositBack.amount`, donc
+le deposit-back ne peut pas échouer pour cause de sortie insuffisante.
+
+**Précédence du slippage :** `ctx.slippageBps` (options du run) est la **seule
+source**. Les configs par primitive ne portent **pas** de `slippageBps`. Le runner
+applique un défaut (50 bps) et **rejette `slippageBps === 0` hors mode démo
+explicite** (`allowZeroSlippage`).
+
+**Résolution `kind → adapter` :** `registry.ts` renvoie `{ kind, cfg }` ; un map
+`ADAPTERS: Record<PrimitiveKind, PrimitiveAdapter<any>>` (dans `run.ts` ou
+`registry.ts`) résout l'instance d'adapter à partir de `kind`. Le runner ne reçoit
+donc qu'un `registryId`.
 
 Une config par protocole, pas un fichier. `registry.ts` mappe un id lisible
 (`"uniswap-v3-usdc-weth"`) → `{ kind, cfg }`, donnant l'illusion « par protocole »
@@ -110,33 +136,50 @@ côté UI/démo tout en gardant un seul adapter par primitive.
 ## 5. Runner unique (`src/defi/run.ts`)
 
 ```ts
-async function runPrivateDefi(client, publicClient, adapter, cfg, {
-  token, amount, slippageBps = 50,
+async function runPrivateDefi(client, publicClient, registryId, {
+  token, amount, slippageBps = 50, allowZeroSlippage = false,
 }) {
+  if (slippageBps === 0 && !allowZeroSlippage) {
+    throw new Error("slippageBps=0 interdit hors mode démo (allowZeroSlippage)");
+  }
+  const { kind, cfg } = registry[registryId];
+  const adapter = ADAPTERS[kind];
+
   // 1. réserver FRESH (invariant privacy)
   const exec = await client.executionAccounts.reserve({ policy: "fresh" });
-  const ctx = { execAccount: exec.account_address, token, amount, slippageBps };
+  const base = { execAccount: exec.account_address, token, amount, slippageBps };
 
-  // 2. batch + montant prudent
+  // 2. preview D'ABORD (résout l'ordre circulaire) — peut throw (quoter revert,
+  //    pool absente, liquidité fine). Aucun fonds retiré à ce stade : safe.
+  const minOut = await adapter.previewMin(cfg, base, publicClient);
+  const ctx = { ...base, minOut };
+
+  // 3. batch (utilise ctx.minOut pour amountOutMinimum)
   const calls = adapter.buildCalls(cfg, ctx);
-  const minOut = await adapter.previewMin(cfg, ctx, publicClient);
 
-  // 3. execute : by_index pour cibler le MÊME compte que celui réservé
-  const result = await client.execute({
-    token,
-    amount: amount.toString(),
-    calls,
-    depositBack: {
-      token: adapter.resultToken(cfg, ctx),
-      amount: minOut.toString(),
-      nonce: randomU128Decimal(),
-      deadline: Math.floor(Date.now() / 1000) + 3600,
-    },
-    allocationPolicy: "by_index",
-    accountIndex: exec.account_index,
-  });
-
-  return { result, exec, minOut };
+  // 4. execute : by_index pour cibler le MÊME compte que celui réservé.
+  //    Atomique : si le batch revert, depositBack n'a pas lieu. Voir gestion d'erreur.
+  try {
+    const result = await client.execute({
+      token,
+      amount: amount.toString(),
+      calls,
+      depositBack: {
+        token: adapter.resultToken(cfg, ctx),
+        amount: minOut.toString(),
+        nonce: randomU128Decimal(),                 // nonce Permit2 non-ordonné, u128
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+      },
+      allocationPolicy: "by_index",
+      accountIndex: exec.account_index,
+    });
+    return { result, exec, minOut };
+  } catch (err) {
+    // Le batch a revert OU le depositBack a échoué. Surface l'erreur + l'adresse
+    // de l'ExecutionAccount réservé pour récupération manuelle (le balayage du
+    // reliquat est hors scope §10). On NE réutilise PAS ce compte fresh.
+    throw new DefiExecuteError(err, { execAccount: exec.account_address, registryId });
+  }
 }
 ```
 
@@ -144,33 +187,61 @@ Décision clé : **`by_index` avec `exec.account_index`** pour garantir que le c
 recipient des `buildCalls` est exactement celui d'où `execute` retire les fonds.
 (Sinon `first_unused` pourrait théoriquement diverger du compte réservé.)
 
+**Gestion d'erreur & fonds (issue reviewer #3).** `execute()` est atomique côté
+batch : un revert on-chain n'ouvre pas la position et ne fait pas le deposit-back.
+**À vérifier au runtime (bloquant avant usage réel) :** quand le batch ou le
+deposit-back échoue, est-ce que le retrait initial (token → ExecutionAccount) est
+*rollback* (fonds rendus au solde privé) ou est-ce que les fonds restent **bloqués
+dans l'ExecutionAccount fresh** (non réutilisable) ? Selon la réponse Unlink, soit
+on ne fait rien (rollback natif), soit le runner doit exposer l'adresse + un
+chemin de récupération. Tant que ce n'est pas confirmé, ne pas brancher sur des
+montants réels non-testnet. Le runner enveloppe tout dans `try/catch` et propage
+`DefiExecuteError { execAccount, registryId }`.
+
+**Dérive preview→execution (issue #4).** Le `minOut` est lu au build ; entre le
+build et l'inclusion on-chain, le ratio share/asset (vault) peut baisser (yield).
+La marge `slippageBps` doit couvrir cette dérive. Pour `aaveSupply`, le ratio est
+≈1:1 mais **ne pas hard-zéro** le slippage. Si la sortie réelle < `depositBack.
+amount`, le deposit-back échoue *après* ouverture de position (pire cas) → c'est
+exactement ce que la marge protège.
+
+`randomU128Decimal()` : nonce Permit2 non-ordonné (u128 aléatoire, décimal). À
+confirmer contre le SDK que c'est le format attendu pour `depositBack.nonce`.
+
 ## 6. Déviations par protocole (gérées en config, pas en réécrivant l'adapter)
 
 ### swap
 - **Uniswap v3** : `ISwapRouter.exactInputSingle({ tokenIn, tokenOut, fee,
   recipient: EA, amountIn, amountOutMinimum, sqrtPriceLimitX96: 0 })`.
-- `previewMin` : `QuoterV2.quoteExactInputSingle` → appliquer `slippageBps`.
-- `amountOutMinimum` non nul en usage réel (0 toléré seulement en démo testnet).
-- Config : `{ router, quoter, tokenOut, fee, slippageBps }`.
+- `previewMin` : `QuoterV2.quoteExactInputSingle` → appliquer `ctx.slippageBps`.
+- `amountOutMinimum = ctx.minOut` (= `depositBack.amount`). Garde `slippageBps=0`
+  au niveau runner (§5), pas dans l'adapter.
+- Config : `{ router, quoter, tokenOut, fee }`. *(Pas de `slippageBps` : source
+  unique = `ctx`.)*
 - v4 / Universal Router (commands encodées) = **hors scope** de cette itération.
 
 ### vault4626
 - `deposit(uint256 assets, address receiver=EA)` ; sortie via
   `redeem(shares, EA, EA)` (évite le dust ; non requis dans ce scope d'entrée).
-- `previewMin` : `previewDeposit(assets)` → appliquer `slippageBps`.
+- `previewMin` : `previewDeposit(assets)` → appliquer `ctx.slippageBps` (la marge
+  doit couvrir la dérive preview→execution, cf §5).
 - **Dead-deposit / inflation** : vault sain a un dépôt mort (≥1e9/1e12 selon
   décimales). Vérifier en « prod » (pas bloquant en démo).
 - **Gate (Morpho Vault V2 `canReceiveShares`, KYC)** : un ExecutionAccount
   éphémère **sera rejeté**. Config `requiresUngatedVault: true` → ne proposer que
   des vaults sans gate. Couvre Yearn / Pendle SY / Aave Earn (tous 4626).
-- Config : `{ vault, asset, requiresUngatedVault, slippageBps }`.
+  **Pré-flight runtime (issue #5)** : `previewMin` (ou un check dédié) sonde
+  `maxDeposit(EA) > 0` (et `canReceiveShares(EA)` si exposé) et **throw clair**
+  avant l'`execute` si le vault est gaté — évite un revert opaque on-chain après
+  retrait des fonds.
+- Config : `{ vault, asset, requiresUngatedVault }`. *(Pas de `slippageBps`.)*
 
 ### aaveSupply
 - `Pool.supply(asset, amount, onBehalfOf=EA, referralCode=0)`.
 - aTokens rebasing : pour tout retirer plus tard, `withdraw(asset,
   type(uint256).max, to)` (pas de dust). Le retrait est hors scope d'entrée ici.
-- `previewMin` : ratio 1:1 asset↔aToken au dépôt → `amount` (slippage ~0, mais
-  garder le champ).
+- `previewMin` : ratio 1:1 asset↔aToken au dépôt → `amount` moins `ctx.slippageBps`
+  (petit, mais **ne pas hard-zéro** : couvre les arrondis / dérive — issue #4).
 - **borrow = hors scope** (VariableDebtToken non-transférable, position
   persistante, corrélation inévitable).
 - Config : `{ pool, asset }`.
@@ -232,8 +303,12 @@ src/defi/
   run.ts              # runPrivateDefi() — reserve fresh + execute + depositBack (by_index)
   preview.ts         # quotes/previewDeposit → minOut avec slippage
   primitives/
-    swap.ts           # Uniswap v3 (cfg: router, quoter, tokenOut, fee, slippageBps)
-    vault4626.ts      # 4626 (cfg: vault, asset, requiresUngatedVault, slippageBps)
+    swap.ts           # Uniswap v3 (cfg: router, quoter, tokenOut, fee)
+    vault4626.ts      # 4626 (cfg: vault, asset, requiresUngatedVault)
     aaveSupply.ts     # Aave (cfg: pool, asset)
-  registry.ts         # id lisible → { kind, cfg }
+  registry.ts         # id lisible → { kind, cfg } + ADAPTERS: kind → adapter
+  errors.ts           # DefiExecuteError { execAccount, registryId }
 ```
+
+`slippageBps` n'est jamais dans une config de primitive : source unique =
+`ctx.slippageBps` (options du run), défaut 50 bps, garde `=0` au runner.
