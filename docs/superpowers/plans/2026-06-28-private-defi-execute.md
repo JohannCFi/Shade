@@ -544,7 +544,7 @@ const ctx = {
   token: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const,
   amount: 1_000_000n,
   slippageBps: 50,
-  minOut: 999_000n,
+  minOut: 995_000n, // = applySlippage(amount, 50); aave supply has no amountOutMinimum
 };
 
 describe("aaveSupplyAdapter.buildCalls", () => {
@@ -810,10 +810,16 @@ export async function runPrivateDefi(
   }
   const { entry, adapter } = resolved ?? resolve(registryId);
 
-  // 1. FRESH ExecutionAccount (privacy invariant)
+  // 1. FRESH ExecutionAccount (privacy invariant). Returns snake_case fields;
+  //    account_address is the CREATE2-predicted EA address but is nullable in the
+  //    schema — guard it: we need it as the recipient in buildCalls.
   const exec = await client.executionAccounts.reserve({ policy: "fresh" });
+  if (!exec.account_address) {
+    throw new Error(`reserve() returned no account_address for index ${exec.account_index}`);
+  }
+  const execAccount = exec.account_address as `0x${string}`;
   const previewCtx: PreviewContext = {
-    execAccount: exec.account_address, token: opts.token, amount: opts.amount, slippageBps,
+    execAccount, token: opts.token, amount: opts.amount, slippageBps,
   };
 
   // 2. preview FIRST (resolves the circular ordering; no funds moved yet)
@@ -838,9 +844,9 @@ export async function runPrivateDefi(
       allocationPolicy: "by_index",
       accountIndex: exec.account_index,
     });
-    return { result, execAccount: exec.account_address, minOut };
+    return { result, execAccount, minOut };
   } catch (err) {
-    throw new DefiExecuteError(err, { execAccount: exec.account_address, registryId });
+    throw new DefiExecuteError(err, { execAccount, registryId });
   }
 }
 ```
@@ -876,7 +882,10 @@ async runDefi(registryId: string, amountHuman: string, opts: { slippageBps?: num
 }
 ```
 
-(Adjust imports: `createPublicClient`, `http` already imported; store `this.rpcUrl` in the constructor if not present.)
+Concrete prerequisite step: in the constructor (`src/sdk/index.ts`), add a field
+`private readonly rpcUrl: string;` and assign `this.rpcUrl = rpcUrl;` (the local
+`const rpcUrl` already exists at ~line 92). `createPublicClient`, `http`,
+`resolveChain`, `this.environment/token/decimals` already exist.
 
 - [ ] **Step 2: Typecheck** — `npx tsc --noEmit` — Expected: PASS.
 - [ ] **Step 3: Commit** — `git add src/sdk/index.ts && git commit -m "feat(defi): ShadeAgent.runDefi wiring"`

@@ -31,13 +31,25 @@ requested token and amount in the ExecutionAccount."* Conséquences :
 - → on calcule un **minOut prudent** via un `preview`/`quote` on-chain + marge de
   slippage (`preview.ts`), et on dépose ce minimum. Le reliquat (dust = sortie
   réelle − minOut) reste dans l'ExecutionAccount (balayage = hors scope).
-- Le batch doit **approuver Permit2** sur le token résultat avant le deposit-back.
-  ⚠️ Permit2 a **deux couches d'allowance** : (a) ERC-20 `approve(PERMIT2, max)`
-  sur le token résultat, et potentiellement (b) `Permit2.approve(token, spender,
-  amount, expiration)`. **À pinner contre le SDK avant impl** : déterminer si le
-  deposit-back Unlink consomme l'allowance ERC-20→Permit2 seule, ou exige aussi la
-  couche interne Permit2. Cela fixe le nombre de calls du batch (et donc la marge
-  vs le plafond de 16).
+- **Permit2 (confirmé contre le SDK `client-core`)** : le deposit-back est un
+  **Permit2 SignatureTransfer** — le relayer *pull* le token depuis l'EA via
+  `permitTransferFrom`. Le witness est **auto-pré-signé par le SDK** (hook
+  `signingHooks.preSignPermit2DepositBack`, injecté automatiquement par
+  `client.execute` session — on ne le passe pas). Le batch n'a donc besoin que
+  d'**UNE** allowance ERC-20 : `approve(PERMIT2_ADDRESS, resultToken, max)`.
+  Pas de couche `Permit2.approve` interne (SignatureTransfer ≠ AllowanceTransfer).
+  L'EA étant `fresh`, il n'a jamais approuvé Permit2 → ce call est obligatoire.
+  `PERMIT2_ADDRESS = 0x000000000022D473030F116dDEE9F6B43aC78BA3` (même sur toutes
+  les chaînes EVM). Batch = 3 calls par primitive (approve action + action +
+  approve Permit2) → marge confortable vs le plafond de 16.
+
+Formes SDK confirmées (`client-core-fx4pyG3H.d.ts`) :
+- `DepositBackParams = { token: string; amount: string; nonce: string; deadline: number }`.
+- `ExecuteCall = { target: string; value: "0"; data: string; label?: string }`
+  (le SDK *strip* le `label` avant l'envoi : usage logs côté client uniquement).
+- `client.execute(SessionExecuteParams)` = `Omit<ExecuteParams, "signSigningRequest" | "signingHooks">`
+  → on passe `{ token, amount, calls, depositBack?, allocationPolicy?, accountIndex? }`.
+- `executeBatch` (Solady) est **atomique** : tout revert interne annule l'UserOp.
 
 `client.execute()` — paramètres confirmés :
 - requis : `token` (ERC-20 retiré), `amount` (base units), `calls` (1–16).
