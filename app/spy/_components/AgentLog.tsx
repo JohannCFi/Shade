@@ -16,7 +16,9 @@ const rowKey = (e: RunEvent, i: number) =>
   e.kind === "decide" ? `decide-${e.tick}` : `${e.kind}-${"hash" in e ? e.hash : i}`;
 
 export function AgentLog({ events, explorerBase, running, tick }: AgentLogProps) {
-  const rows = events.filter((e) => e.kind === "fund" || e.kind === "pay" || e.kind === "decide");
+  const rows = events.filter(
+    (e) => e.kind === "fund" || e.kind === "pay" || e.kind === "decide" || e.kind === "trade",
+  );
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--bg-panel)]">
@@ -40,12 +42,20 @@ export function AgentLog({ events, explorerBase, running, tick }: AgentLogProps)
           <ul className="space-y-0.5">
             {rows.map((e, i) => (
               <li key={rowKey(e, i)} className="grid grid-cols-[2.2rem_1fr_auto_8rem] items-baseline gap-3 border-b border-[var(--line)] py-1.5 font-mono text-xs last:border-0">
-                <span className="text-faint">{"tick" in e ? `t${e.tick + 1}` : "init"}</span>
+                <span className="text-faint">{e.kind === "pay" || e.kind === "decide" ? `t${e.tick + 1}` : e.kind === "trade" ? "alloc" : "init"}</span>
                 {e.kind === "decide" ? (
                   <>
                     <span className="text-ink">decide → {e.action}</span>
                     <span className="text-faint">eth {Math.round(e.ethPrice).toLocaleString()} · btc {e.btcSignal}</span>
                     <span className="text-right text-faint">—</span>
+                  </>
+                ) : e.kind === "trade" ? (
+                  <>
+                    <span className="text-ink">allocate → {e.label}</span>
+                    <span className="text-faint">{usd(e.amount)}</span>
+                    <a className="text-right text-[#7da7c7] hover:underline" href={`${explorerBase}/tx/${e.hash}`} target="_blank" rel="noreferrer">
+                      {short(e.hash)} ↗
+                    </a>
                   </>
                 ) : (
                   <>

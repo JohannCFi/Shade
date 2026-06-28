@@ -3,6 +3,7 @@ import { arcTestnet } from "viem/chains";
 import { readObservablePayments } from "@/src/spy/chain-reader";
 import { reconstruct } from "@/src/spy/reconstruct";
 import { deriveSpyAddresses, oracleLabels } from "@/src/spy/agents";
+import { registerDemoVenues, demoVenueLabels } from "@/src/defi/demo-registry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +22,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   const rail = params.get("rail") === "unlink" ? "unlink" : "transparent";
   const addrs = deriveSpyAddresses(mnemonic);
   const oracleSet = new Set([addrs.ethOracle.toLowerCase(), addrs.btcOracle.toLowerCase()]);
+  const venueLabels = demoVenueLabels(registerDemoVenues());
+  const venueSet = new Set(Object.keys(venueLabels));
 
   // The transparent agent is ephemeral (a fresh EOA per run), so the client passes
   // the current run's address. With no address there is no run to spy on yet → the
@@ -37,15 +40,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     rpcUrl: process.env.RPC_URL,
   });
 
-  // Keep incoming (funder) + outgoing only to known oracles (ignore deposit noise).
+  // Keep incoming (funder) + outgoing to known oracles OR DeFi venues (ignore deposit noise).
   const filtered = payments.filter((p) => {
     const a = address.toLowerCase();
     if (p.to.toLowerCase() === a) return true;
-    return p.from.toLowerCase() === a && oracleSet.has(p.to.toLowerCase());
+    const to = p.to.toLowerCase();
+    return p.from.toLowerCase() === a && (oracleSet.has(to) || venueSet.has(to));
   });
 
   const labels = oracleLabels(addrs);
-  const report = reconstruct({ agentAddress: address, payments: filtered, knownOracles: labels });
+  const report = reconstruct({ agentAddress: address, payments: filtered, knownOracles: labels, knownVenues: venueLabels });
 
   // Real on-chain proof: the actual Transfer txs the spy read, linked to ArcScan.
   const explorerBase = arcTestnet.blockExplorers?.default?.url ?? "https://testnet.arcscan.app";
@@ -58,7 +62,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         hash: p.txHash!,
         url: `${explorerBase}/tx/${p.txHash}`,
         kind: out ? ("out" as const) : ("in" as const),
-        label: out ? labels[counterparty] ?? "oracle" : "funding",
+        label: out ? labels[counterparty] ?? venueLabels[counterparty] ?? "oracle" : "funding",
         amount: p.amount,
       };
     });

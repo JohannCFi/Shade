@@ -1,6 +1,7 @@
 import { runTransparentAgentStream } from "@/src/spy/transparent-run";
 import { runPrivatePayments } from "@/src/spy/private-run";
 import { ndjsonStream } from "@/src/spy/ndjson";
+import { registerDemoVenues } from "@/src/defi/demo-registry";
 import type { RunEvent } from "@/src/spy/run-events";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,9 @@ export async function POST(request: Request): Promise<Response> {
   const environment = process.env.UNLINK_ENVIRONMENT ?? "arc-testnet";
   const apiKey = process.env.UNLINK_API_KEY;
 
+  // The DeFi venues the agent allocates into (vault/swap/aave) — empty if unconfigured.
+  const venues = registerDemoVenues();
+
   async function* live(): AsyncGenerator<RunEvent> {
     let agent = "0x0000000000000000000000000000000000000000" as `0x${string}`;
     for await (const e of runTransparentAgentStream({
@@ -40,6 +44,7 @@ export async function POST(request: Request): Promise<Response> {
       environment,
       rpcUrl: process.env.RPC_URL,
       ticks,
+      venues,
     })) {
       if (e.kind === "done") { agent = e.agent; continue; }
       yield e;
@@ -57,12 +62,14 @@ export async function POST(request: Request): Promise<Response> {
           rpcUrl: process.env.RPC_URL,
           ticks,
           tokenDecimals,
+          venues,
         });
         yield {
           kind: "private",
           payments: priv.payments,
           sellersReceived: priv.sellersReceived,
           withdrawals: priv.withdrawals,
+          defi: priv.defi,
           explorerBase: priv.explorerBase,
         };
       } catch {

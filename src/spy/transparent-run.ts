@@ -4,6 +4,8 @@ import { resolveChain } from "../chain/chains.js";
 import { decide } from "../agent/strategy.js";
 import { ethPriceAt, btcSignalAt } from "../oracle/feed.js";
 import { deriveSpyAddresses, type SpyAddresses } from "./agents.js";
+import { tradeTransparent } from "./defi-trades.js";
+import type { DemoVenue } from "../defi/demo-registry.js";
 import type { RunEvent } from "./run-events.js";
 
 export interface TransparentRunOpts {
@@ -13,6 +15,8 @@ export interface TransparentRunOpts {
   environment?: string;
   rpcUrl?: string;
   ticks?: number;
+  /** DeFi venues the agent allocates capital into after the ticks (visible trades). */
+  venues?: DemoVenue[];
 }
 
 /** I/O seam: real chain transfers in prod, a fake in tests. */
@@ -22,6 +26,8 @@ export interface TransparentRunIO {
   fund(): Promise<`0x${string}`>;
   /** Pay one oracle `amount` (base units); returns the transfer hash. */
   payOracle(to: `0x${string}`, amount: bigint): Promise<`0x${string}`>;
+  /** Allocate `amount` into a venue from the agent EOA (visible). Optional: absent in tests. */
+  allocate?(venue: DemoVenue, amount: bigint): Promise<`0x${string}`>;
 }
 
 const FALLBACK_EXPLORER = "https://testnet.arcscan.app";
@@ -34,6 +40,11 @@ function priceFor(decimals: number): bigint {
   return 10n ** BigInt(Math.max(decimals - 3, 0)); // 0.001 token
 }
 
+/** Capital the agent allocates into each venue (0.05 token). */
+export function allocAmountFor(decimals: number): bigint {
+  return 10n ** BigInt(decimals) / 20n; // 0.05 token
+}
+
 /**
  * Build the real-chain IO. Funder is the project wallet (index 0); the agent is a
  * FRESH ephemeral EOA generated per run, so the spy reconstructs only THIS run —
@@ -43,7 +54,10 @@ function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses, ticks: number
   const chain = resolveChain(opts.environment ?? "arc-testnet");
   const rpcUrl = opts.rpcUrl ?? chain.defaultRpc;
   const token = opts.token as `0x${string}`;
-  const price = priceFor(opts.tokenDecimals ?? 6);
+  const decimals = opts.tokenDecimals ?? 6;
+  const price = priceFor(decimals);
+  const venues = opts.venues ?? [];
+  const allocAmount = allocAmountFor(decimals);
 
   const funder = mnemonicToAccount(opts.mnemonic);
   const agent = privateKeyToAccount(generatePrivateKey());
@@ -54,9 +68,11 @@ function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses, ticks: number
   return {
     agent: agent.address,
     async fund() {
-      const gasHash = await funderWallet.sendTransaction({ to: agent.address, value: parseEther("0.02") });
+      // Extra gas headroom when the agent also runs allocation txs (approve + action per venue).
+      const gas = venues.length > 0 ? parseEther("0.05") : parseEther("0.02");
+      const gasHash = await funderWallet.sendTransaction({ to: agent.address, value: gas });
       await pub.waitForTransactionReceipt({ hash: gasHash });
-      const fundAmount = price * BigInt(ticks) * 2n + price;
+      const fundAmount = price * BigInt(ticks) * 2n + allocAmount * BigInt(venues.length) + price;
       const fundHash = await funderWallet.writeContract({ address: token, abi: erc20Abi, functionName: "transfer", args: [agent.address, fundAmount] });
       await pub.waitForTransactionReceipt({ hash: fundHash });
       return fundHash;
@@ -65,6 +81,19 @@ function makeRealIo(opts: TransparentRunOpts, addrs: SpyAddresses, ticks: number
       const h = await agentWallet.writeContract({ address: token, abi: erc20Abi, functionName: "transfer", args: [to, amount] });
       await pub.waitForTransactionReceipt({ hash: h });
       return h;
+    },
+    async allocate(venue, amount) {
+      return tradeTransparent(
+        {
+          agent: agent.address,
+          token,
+          writeContract: (a) => agentWallet.writeContract(a as any),
+          sendTransaction: (a) => agentWallet.sendTransaction(a as any),
+          waitForTransactionReceipt: (a) => pub.waitForTransactionReceipt(a as any),
+        },
+        venue.entry,
+        amount,
+      );
     },
   };
 }
@@ -99,6 +128,22 @@ export async function* runTransparentAgentStream(
     const action = decide({ ethPrice, ethPrevPrice, btcSignal });
     yield { kind: "decide", tick: t, action, ethPrice, btcSignal };
     prevEth = ethPrice;
+  }
+
+  // Allocation phase: the agent ACTS on its decision by deploying capital into
+  // each DeFi venue — REAL, visible trades from its EOA. This is the leak the
+  // private rail erases. Per-venue try/catch so one failure never sinks the run.
+  const venues = opts.venues ?? [];
+  if (runner.allocate && venues.length > 0) {
+    const amount = allocAmountFor(opts.tokenDecimals ?? 6);
+    for (const venue of venues) {
+      try {
+        const hash = await runner.allocate(venue, amount);
+        yield { kind: "trade", label: venue.label, primitive: venue.kind, venue: venue.venueAddress, amount: amount.toString(), hash };
+      } catch {
+        // venue trade unavailable this run — skip it, the rest of the demo stands
+      }
+    }
   }
 
   yield { kind: "done", agent: runner.agent };

@@ -7,11 +7,13 @@ import { parseNdjsonLines } from "@/src/spy/ndjson";
 import type { RunEvent } from "@/src/spy/run-events";
 
 interface OracleUsage { oracle: string; label?: string; calls: number; totalSpent: string }
+interface VenueAllocation { venue: string; label?: string; amount: string }
 interface SpyReport {
   readable: boolean;
   payer: string | null;
   funder: string | null;
   oracles: OracleUsage[];
+  allocations: VenueAllocation[];
   totalSpent: string;
   inferredStrategy: string | null;
 }
@@ -21,10 +23,12 @@ interface RailData { report: SpyReport | null; txs: SpyTx[] }
 const usd = (atomic: string) => `${(Number(atomic) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`;
 const short = (a: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
+type PrivateDefiAction = { label: string; primitive: string; execAccount: string; status: string };
 type PrivateResult = {
   payments: number;
   sellersReceived: { label: string; amount: string }[];
   withdrawals: { label: string; hash: string }[];
+  defi?: { attempted: number; executed: number; actions: PrivateDefiAction[] };
   explorerBase: string;
 };
 
@@ -100,6 +104,7 @@ export default function SpyPage() {
                 payments: e.payments,
                 sellersReceived: e.sellersReceived,
                 withdrawals: e.withdrawals,
+                defi: e.defi,
                 explorerBase: e.explorerBase,
               });
               continue;
@@ -141,8 +146,15 @@ export default function SpyPage() {
       return;
     }
     const sellers = privateResult.sellersReceived.map((s) => `${s.label} ${s.amount}`).join(" · ");
+    const defi = privateResult.defi;
+    const defiLine =
+      defi && defi.executed > 0
+        ? ` + ${defi.executed} private DeFi allocation${defi.executed > 1 ? "s" : ""} (${defi.actions
+            .map((a) => a.label)
+            .join(", ")}) via fresh ExecutionAccounts — no on-chain link.`
+        : "";
     setVerify(
-      `${privateResult.payments} private payments confirmed this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}`,
+      `${privateResult.payments} private payments confirmed this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}${defiLine}`,
     );
     setVerifyLinks(
       privateResult.withdrawals.map((w) => ({
@@ -244,6 +256,15 @@ function SpyPanel({ tone, rail, subtitle, report, txs, onVerify, verifyText, ver
         <Row
           label="Oracles queried"
           value={readable ? (report!.oracles.map((o) => `${o.label ?? short(o.oracle)} ×${o.calls}`).join("  ·  ") || "-") : "▓░▒▓ noise ▒░▓"}
+          hot={exposed && readable}
+        />
+        <Row
+          label="Capital allocated"
+          value={
+            readable
+              ? (report!.allocations.map((a) => `${a.label ?? short(a.venue)} ${usd(a.amount)}`).join("  ·  ") || "—")
+              : "▓▒░ unreadable ░▒▓"
+          }
           hot={exposed && readable}
         />
         <Row label="Budget spent" value={readable ? usd(report!.totalSpent) : "—"} hot={exposed && readable} />

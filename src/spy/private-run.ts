@@ -13,6 +13,12 @@ import { resolveChain } from "../chain/chains.js";
 import { createNodeUnlinkContext } from "../unlink/node-client.js";
 import { UNLINK_APP_ID } from "../unlink/app-id.js";
 import { fromBaseUnits } from "../unlink/units.js";
+import { runPrivateDefi } from "../defi/run.js";
+import { ADAPTERS } from "../defi/registry.js";
+import { makeExecAccountResolver } from "../defi/execution-account.js";
+import { allocAmountFor } from "./transparent-run.js";
+import type { DemoVenue } from "../defi/demo-registry.js";
+import type { PrivateDefiAction } from "./run-events.js";
 
 const FALLBACK_EXPLORER = "https://testnet.arcscan.app";
 
@@ -24,6 +30,8 @@ export interface PrivateRunOpts {
   rpcUrl?: string;
   ticks: number;
   tokenDecimals?: number;
+  /** DeFi venues to allocate into privately via execute() (mirrors the transparent rail). */
+  venues?: DemoVenue[];
 }
 
 export interface PrivateRunResult {
@@ -31,6 +39,8 @@ export interface PrivateRunResult {
   sellersReceived: { label: string; amount: string }[];
   /** Public on-chain withdrawals (the oracles cashing out the private value). */
   withdrawals: { label: string; hash: string }[];
+  /** Private DeFi allocations run via execute() — invisible on-chain. */
+  defi: { attempted: number; executed: number; actions: PrivateDefiAction[] };
   explorerBase: string;
 }
 
@@ -87,8 +97,10 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
 
   // Keep the live demo reliable: if the agent's shielded pool can't cover this
   // run, top it up from the owner's EVM wallet (deposit ~20 runs of buffer).
+  const venues = opts.venues ?? [];
+  const allocAmount = allocAmountFor(decimals);
   const agentAddr = await agentAccount.getAddress();
-  const needed = BigInt(price) * BigInt(opts.ticks) * 2n;
+  const needed = BigInt(price) * BigInt(opts.ticks) * 2n + allocAmount * BigInt(venues.length);
   if ((await balanceOf(agentAddr)) < needed) {
     const topUp = (needed * 20n).toString();
     await (await client.depositWithApproval({ token, amount: topUp })).wait();
@@ -136,6 +148,33 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
     }
   }
 
+  // Private DeFi allocations: the SAME trades the transparent rail just leaked,
+  // but each through a fresh ExecutionAccount via execute() — invisible on-chain.
+  // Best-effort per venue so a slow/failed allocation never sinks the run.
+  const resolver = makeExecAccountResolver({ client: client as any, account: agentAccount, chainId: chain.chainId });
+  const actions: PrivateDefiAction[] = [];
+  let attempted = 0;
+  for (const venue of venues) {
+    attempted++;
+    try {
+      const res = await runPrivateDefi(
+        client as any,
+        publicClient as any,
+        venue.id,
+        { token: token as `0x${string}`, amount: allocAmount, slippageBps: 100, execAccountResolver: resolver },
+        { entry: venue.entry, adapter: ADAPTERS[venue.kind] },
+      );
+      actions.push({
+        label: venue.label,
+        primitive: venue.kind,
+        execAccount: res.execAccount,
+        status: ((res.result as { status?: string })?.status) ?? "completed",
+      });
+    } catch {
+      // private allocation unavailable this run — leave it out, the rest stands
+    }
+  }
+
   return {
     payments,
     sellersReceived: [
@@ -143,6 +182,7 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
       { label: "BTC signal", amount: fromBaseUnits(btcDelta.toString(), decimals) },
     ],
     withdrawals,
+    defi: { attempted, executed: actions.length, actions },
     explorerBase,
   };
 }

@@ -26,6 +26,15 @@ export interface OracleUsage {
   totalSpent: string;
 }
 
+/** A DeFi venue the agent moved capital into (reconstructed from the transparent rail). */
+export interface VenueAllocation {
+  venue: string;
+  /** Human label if known (e.g. "Yield vault"). */
+  label?: string;
+  /** Total capital sent to this venue, smallest unit (decimal string). */
+  amount: string;
+}
+
 /** What the spy reconstructed for one rail. */
 export interface SpyReport {
   /** True if the observer could reconstruct anything at all. */
@@ -36,6 +45,8 @@ export interface SpyReport {
   funder: string | null;
   /** Oracles the agent queries, most-used first. */
   oracles: OracleUsage[];
+  /** DeFi venues the agent allocated capital into (the leaked execution). */
+  allocations: VenueAllocation[];
   /** Total the agent spent, smallest unit (decimal string). */
   totalSpent: string;
   /** One-line reconstructed strategy, or null if unreadable. */

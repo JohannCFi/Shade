@@ -1,4 +1,4 @@
-import type { ObservablePayment, OracleUsage, SpyReport } from "./types.js";
+import type { ObservablePayment, OracleUsage, SpyReport, VenueAllocation } from "./types.js";
 
 export interface ReconstructInput {
   /** The agent address the spy is profiling. */
@@ -7,6 +7,8 @@ export interface ReconstructInput {
   payments: ObservablePayment[];
   /** Optional address(lowercased)→label map to humanize known oracles. */
   knownOracles?: Record<string, string>;
+  /** Optional address(lowercased)→label map of known DeFi venues (the leaked allocations). */
+  knownVenues?: Record<string, string>;
 }
 
 /**
@@ -22,10 +24,20 @@ export function reconstruct(input: ReconstructInput): SpyReport {
   const outgoing = input.payments.filter((p) => p.from.toLowerCase() === agent);
   const incoming = input.payments.filter((p) => p.to.toLowerCase() === agent);
 
+  const venueSet = input.knownVenues ?? {};
   const byOracle = new Map<string, OracleUsage>();
+  const byVenue = new Map<string, VenueAllocation>();
   let totalSpent = 0n;
   for (const p of outgoing) {
     const key = p.to.toLowerCase();
+    if (key in venueSet) {
+      // Capital deployed into a DeFi venue — the leaked execution.
+      const alloc: VenueAllocation = byVenue.get(key) ?? { venue: p.to, label: venueSet[key], amount: "0" };
+      alloc.amount = (BigInt(alloc.amount) + BigInt(p.amount)).toString();
+      byVenue.set(key, alloc);
+      totalSpent += BigInt(p.amount);
+      continue;
+    }
     const existing = byOracle.get(key);
     const usage: OracleUsage = existing ?? {
       oracle: p.to,
@@ -40,6 +52,7 @@ export function reconstruct(input: ReconstructInput): SpyReport {
   }
 
   const oracles = [...byOracle.values()].sort((a, b) => b.calls - a.calls);
+  const allocations = [...byVenue.values()];
   const readable = outgoing.length > 0;
 
   return {
@@ -47,17 +60,23 @@ export function reconstruct(input: ReconstructInput): SpyReport {
     payer: readable ? input.agentAddress : null,
     funder: incoming.length > 0 ? incoming[0].from : null,
     oracles,
+    allocations,
     totalSpent: totalSpent.toString(),
-    inferredStrategy: readable ? inferStrategy(oracles) : null,
+    inferredStrategy: readable ? inferStrategy(oracles, allocations) : null,
   };
 }
 
-function inferStrategy(oracles: OracleUsage[]): string {
-  const labels = oracles.filter((o) => o.label).map((o) => o.label!);
-  if (labels.length > 0) {
-    return `Follows the ${labels.join(" and ")} oracle${labels.length > 1 ? "s" : ""}.`;
+function inferStrategy(oracles: OracleUsage[], allocations: VenueAllocation[]): string {
+  const parts: string[] = [];
+  const oracleLabels = oracles.filter((o) => o.label).map((o) => o.label!);
+  if (oracleLabels.length > 0) {
+    parts.push(`Follows the ${oracleLabels.join(" and ")} oracle${oracleLabels.length > 1 ? "s" : ""}`);
+  } else if (oracles.length > 0) {
+    parts.push(`Queries ${oracles.length} oracle${oracles.length > 1 ? "s" : ""}`);
   }
-  return `Queries ${oracles.length} oracle${oracles.length > 1 ? "s" : ""}: ${oracles
-    .map((o) => o.oracle)
-    .join(", ")}.`;
+  const venueLabels = allocations.map((a) => a.label ?? a.venue);
+  if (venueLabels.length > 0) {
+    parts.push(`deploys capital into ${venueLabels.join(", ")}`);
+  }
+  return parts.length > 0 ? `${parts.join("; ")}.` : "No readable activity.";
 }
