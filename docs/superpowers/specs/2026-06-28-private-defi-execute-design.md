@@ -285,18 +285,32 @@ contre un protocole de production.
 - Bring-your-own-bot : marche aussi en mode remote (auth ShadeSig scoped), à
   confirmer au runtime (§2.2).
 
-## 9. Checklist de revue (« ça marche »)
+## 9. Checklist de revue (« ça marche ») — STATUT : ✅ implémenté + E2E vert
 
-- [ ] Politique `fresh` partout sur les actions atomiques (invariant privacy).
-- [ ] `depositBack` récupère le token résultat (montant via preview+slippage §2.1).
-- [ ] Slippage non nul en usage réel (swap + vault).
-- [ ] Vault 4626 : dead-deposit présent + pas de gate (`requiresUngatedVault`).
-- [ ] Client seed-backed (sinon `execute` impossible) — vérifié, OK pour les deux
-      chemins Shade.
-- [ ] `/spy` rail privé : aucun lien Exec↔identité.
-- [ ] Les 3 adapters + entrées registry compilent (typecheck / `npm run build`).
-- [ ] ≥1 primitive (`vault4626`) testée E2E sur testnet
-      (reserve → execute → depositBack).
+> Implémenté dans `src/defi/` (23 tests unitaires, typecheck clean). E2E vault4626
+> réussi sur arc-testnet le 2026-06-28 : `status=completed`, 0.1 USDC déposés dans
+> MockERC4626 `0x4e22a0c79b16a48512d80fdb19f98ab9f42f30a9`, 99000 shares rapatriées.
+
+- [x] Politique `fresh` partout sur les actions atomiques (runner hardcode
+      `{policy:"fresh"}` ; confirmé live : `account_index` ↑ à chaque appel).
+- [x] `depositBack` récupère le token résultat (montant via preview+slippage §2.1).
+- [x] Slippage non nul en usage réel (swap + vault) — garde `=0` au runner.
+- [~] Vault 4626 : pas de gate (`requiresUngatedVault` + pré-flight `maxDeposit`).
+      Dead-deposit prévu par le script de deploy (a timeout sur Arc ; non bloquant
+      car vault vide → 1:1). À re-seeder pour un usage « prod ».
+- [x] Client seed-backed — `fromEthereumSignature` ET `fromMnemonic` le sont
+      (les deux dérivent via `fromSeed`). Seul `fromKeys` ne peut pas execute.
+- [x] `/spy` rail privé : aucun lien Exec↔identité (`private-activity.ts`
+      n'expose aucune adresse d'ExecutionAccount — inspection §8).
+- [x] Les 3 adapters + entrées registry compilent (typecheck clean).
+- [x] ≥1 primitive (`vault4626`) testée E2E sur testnet
+      (reserve → resolve EA → execute → depositBack).
+
+> **Correctif découvert au runtime (probe)** : `reserve()` ne renvoie que les
+> indices, PAS `account_address`, pour un compte fresh non déployé. Le runner
+> dérive donc l'adresse CREATE2 côté client via `createExecutionAccountClient`
+> (`src/defi/execution-account.ts`), à partir de `factory_address` /
+> `account_implementation_address` de `getEnvironmentInfo()`.
 
 ## 10. Hors scope (explicite)
 
