@@ -84,7 +84,33 @@ describe("runPrivateDefi", () => {
     });
   });
 
-  it("throws when reserve returns no account_address", async () => {
+  it("derives execAccount via execAccountResolver when reserve omits account_address", async () => {
+    const client = mockClient();
+    client.executionAccounts.reserve = vi
+      .fn()
+      .mockResolvedValue({ account_index: 4, tenant_index: 48, chain_index: 1 });
+    const resolver = vi.fn().mockResolvedValue("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    const adapter = {
+      kind: "vault4626" as const,
+      previewMin: vi.fn().mockResolvedValue(1n),
+      buildCalls: vi.fn().mockReturnValue([]),
+      resultToken: vi.fn().mockReturnValue("0xaaaa"),
+    };
+    const res = await runPrivateDefi(
+      client as any,
+      {} as any,
+      "id",
+      { token, amount: 1n, slippageBps: 50, execAccountResolver: resolver },
+      { entry: { kind: "vault4626", cfg: {} as any }, adapter },
+    );
+    expect(resolver).toHaveBeenCalledOnce();
+    expect(res.execAccount).toBe("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    // adapter saw the resolved address as recipient
+    const previewCtx = adapter.previewMin.mock.calls[0]![1] as any;
+    expect(previewCtx.execAccount).toBe("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+  });
+
+  it("throws when reserve returns no account_address and no resolver", async () => {
     const client = mockClient();
     client.executionAccounts.reserve = vi.fn().mockResolvedValue({ account_index: 3 });
     const adapter = {

@@ -2,12 +2,20 @@ import type { PublicClient } from "viem";
 import type { PreviewContext, PrimitiveAdapter } from "./types.js";
 import { DefiExecuteError } from "./errors.js";
 import { resolve, type RegistryEntry } from "./registry.js";
+import type { ExecAccountResolver } from "./execution-account.js";
 
 export interface RunOptions {
   token: `0x${string}`;
   amount: bigint;
   slippageBps?: number;
   allowZeroSlippage?: boolean;
+  /**
+   * Resolves the ExecutionAccount address from a reservation. Required because
+   * reserve() returns only indices (no account_address) for a fresh, undeployed
+   * account. Build one with makeExecAccountResolver(). When omitted, the runner
+   * relies on reservation.account_address and throws if it is absent.
+   */
+  execAccountResolver?: ExecAccountResolver;
 }
 
 export interface RunResult {
@@ -47,10 +55,16 @@ export async function runPrivateDefi(
   //    account_address is the CREATE2-predicted EA address but is nullable in the
   //    schema — guard it: we need it as the recipient in buildCalls.
   const exec = await client.executionAccounts.reserve({ policy: "fresh" });
-  if (!exec.account_address) {
-    throw new Error(`reserve() returned no account_address for index ${exec.account_index}`);
+  let execAccount: `0x${string}`;
+  if (exec.account_address) {
+    execAccount = exec.account_address as `0x${string}`;
+  } else if (opts.execAccountResolver) {
+    execAccount = await opts.execAccountResolver(exec);
+  } else {
+    throw new Error(
+      `reserve() returned no account_address for index ${exec.account_index} and no execAccountResolver was provided`,
+    );
   }
-  const execAccount = exec.account_address as `0x${string}`;
   const previewCtx: PreviewContext = {
     execAccount,
     token: opts.token,
