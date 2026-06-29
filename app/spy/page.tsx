@@ -28,7 +28,7 @@ type PrivateResult = {
   payments: number;
   sellersReceived: { label: string; amount: string }[];
   withdrawals: { label: string; hash: string }[];
-  defi?: { attempted: number; executed: number; actions: PrivateDefiAction[] };
+  defi?: { attempted: number; executed: number; actions: PrivateDefiAction[]; note?: string };
   explorerBase: string;
 };
 
@@ -55,6 +55,7 @@ export default function SpyPage() {
   const [verifyLinks, setVerifyLinks] = useState<{ label: string; url: string }[]>([]);
   const [agentAddr, setAgentAddr] = useState<string | null>(null);
   const [privateResult, setPrivateResult] = useState<PrivateResult | null>(null);
+  const [privateReason, setPrivateReason] = useState<string | null>(null);
   const [ranOnce, setRanOnce] = useState(false);
 
   // On load only the (always-blind) right rail is read; the left starts empty and
@@ -62,12 +63,15 @@ export default function SpyPage() {
   useEffect(() => { fetchRail("unlink").then(setRight); }, []);
 
   async function runLive() {
-    const totalTicks = 3;
+    // 2 ticks keeps the transparent rail's real on-chain txs inside Vercel's 60s
+    // serverless window (each rail runs as its own request). Still shows a BUY.
+    const totalTicks = 2;
     setRunning(true);
     setEvents([]);
     setVerify(null);
     setVerifyLinks([]);
     setPrivateResult(null);
+    setPrivateReason(null);
     setLeft({ report: null, txs: [] });
     setLiveTick({ current: 1, total: totalTicks });
     setStatus("Streaming the agent's real payments on Arc…");
@@ -99,16 +103,6 @@ export default function SpyPage() {
               continue;
             }
             if (e.kind === "error") throw new Error(e.message);
-            if (e.kind === "private") {
-              setPrivateResult({
-                payments: e.payments,
-                sellersReceived: e.sellersReceived,
-                withdrawals: e.withdrawals,
-                defi: e.defi,
-                explorerBase: e.explorerBase,
-              });
-              continue;
-            }
             setEvents((prev) => [...prev, e]);
             if (e.kind === "decide") setLiveTick({ current: Math.min(e.tick + 2, totalTicks), total: totalTicks });
             if (e.kind === "fund" || e.kind === "pay") {
@@ -125,6 +119,31 @@ export default function SpyPage() {
       setRight(await fetchRail("unlink"));
       if (runAgent) setLeft(await fetchRail("transparent", runAgent));
       setRanOnce(true);
+
+      // Private rail runs as its OWN request (separate 60s window): same oracle
+      // payments + DeFi allocations via Unlink, returning this run's proof.
+      setStatus("Proving the private rail on Unlink (payments + allocations)…");
+      try {
+        const pr = await fetch("/api/spy/run-private", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticks: totalTicks }),
+        });
+        const pj = await pr.json();
+        if (pj?.ok) {
+          setPrivateResult({
+            payments: pj.payments,
+            sellersReceived: pj.sellersReceived,
+            withdrawals: pj.withdrawals,
+            defi: pj.defi,
+            explorerBase: pj.explorerBase,
+          });
+        } else {
+          setPrivateReason(pj?.reason ?? "private rail unavailable");
+        }
+      } catch (e) {
+        setPrivateReason((e as Error).message);
+      }
       setStatus("Done — left reconstructed from the chain; right stayed dark.");
     } catch (e) {
       setStatus(`Failed: ${(e as Error).message}`);
@@ -141,7 +160,11 @@ export default function SpyPage() {
       return;
     }
     if (!privateResult) {
-      setVerify("Private rail unavailable this run — check the Unlink pool/engine.");
+      setVerify(
+        privateReason
+          ? `Private rail this run: ${privateReason}`
+          : "Private rail still running — give it a few seconds, then verify again.",
+      );
       setVerifyLinks([]);
       return;
     }
@@ -153,8 +176,9 @@ export default function SpyPage() {
             .map((a) => a.label)
             .join(", ")}) via fresh ExecutionAccounts — no on-chain link.`
         : "";
+    const noteLine = defi?.note ? ` [${defi.note}]` : "";
     setVerify(
-      `${privateResult.payments} private payments confirmed this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}${defiLine}`,
+      `${privateResult.payments} private payments confirmed this run — invisible on the explorer.${sellers ? ` (${sellers})` : ""}${defiLine}${noteLine}`,
     );
     setVerifyLinks(
       privateResult.withdrawals.map((w) => ({

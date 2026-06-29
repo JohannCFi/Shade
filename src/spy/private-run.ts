@@ -32,6 +32,8 @@ export interface PrivateRunOpts {
   tokenDecimals?: number;
   /** DeFi venues to allocate into privately via execute() (mirrors the transparent rail). */
   venues?: DemoVenue[];
+  /** Epoch ms after which we stop starting new DeFi execute() calls (fit the serverless window). */
+  deadlineMs?: number;
 }
 
 export interface PrivateRunResult {
@@ -40,7 +42,7 @@ export interface PrivateRunResult {
   /** Public on-chain withdrawals (the oracles cashing out the private value). */
   withdrawals: { label: string; hash: string }[];
   /** Private DeFi allocations run via execute() — invisible on-chain. */
-  defi: { attempted: number; executed: number; actions: PrivateDefiAction[] };
+  defi: { attempted: number; executed: number; actions: PrivateDefiAction[]; note?: string };
   explorerBase: string;
 }
 
@@ -154,7 +156,14 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
   const resolver = makeExecAccountResolver({ client: client as any, account: agentAccount, chainId: chain.chainId });
   const actions: PrivateDefiAction[] = [];
   let attempted = 0;
+  let note: string | undefined;
   for (const venue of venues) {
+    // Stop starting new execute() calls once we're near the serverless deadline —
+    // each takes ~10s, so leave headroom. We report how many we got through.
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs) {
+      note = `stopped after ${actions.length}/${venues.length} allocations to fit the time window`;
+      break;
+    }
     attempted++;
     try {
       const res = await runPrivateDefi(
@@ -170,8 +179,9 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
         execAccount: res.execAccount,
         status: ((res.result as { status?: string })?.status) ?? "completed",
       });
-    } catch {
-      // private allocation unavailable this run — leave it out, the rest stands
+    } catch (err) {
+      // private allocation failed this run — record the reason, keep going
+      note = `${venue.label}: ${(err as Error)?.message ?? "failed"}`;
     }
   }
 
@@ -182,7 +192,7 @@ export async function runPrivatePayments(opts: PrivateRunOpts): Promise<PrivateR
       { label: "BTC signal", amount: fromBaseUnits(btcDelta.toString(), decimals) },
     ],
     withdrawals,
-    defi: { attempted, executed: actions.length, actions },
+    defi: { attempted, executed: actions.length, actions, note },
     explorerBase,
   };
 }

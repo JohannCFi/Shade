@@ -1,5 +1,4 @@
 import { runTransparentAgentStream } from "@/src/spy/transparent-run";
-import { runPrivatePayments } from "@/src/spy/private-run";
 import { ndjsonStream } from "@/src/spy/ndjson";
 import { registerDemoVenues } from "@/src/defi/demo-registry";
 import type { RunEvent } from "@/src/spy/run-events";
@@ -11,11 +10,10 @@ export const maxDuration = 120;
 const TOKEN = process.env.UNLINK_TEST_TOKEN ?? "0x3600000000000000000000000000000000000000";
 
 /**
- * Live trigger: run BOTH rails for real and STREAM one NDJSON event per step.
- * Transparent rail (ephemeral agent) streams start/fund/pay/decide so the agent
- * panel + left spy panel fill in real time. Then the private rail pays the same
- * oracles via Unlink and a `private` event carries THIS run's confirmed private
- * payments (delta) for the "verify on engine" proof. POST { ticks? } (capped 1–5).
+ * Live trigger: run the TRANSPARENT rail for real and STREAM one NDJSON event per
+ * step (start/fund/pay/decide + the capital-allocation trades). The private rail
+ * is a SEPARATE request (`/api/spy/run-private`) so each rail gets its own 60s
+ * serverless window — running both here blew the Vercel limit. POST { ticks? }.
  */
 export async function POST(request: Request): Promise<Response> {
   const mnemonic = process.env.WALLET_MNEMONIC;
@@ -30,7 +28,6 @@ export async function POST(request: Request): Promise<Response> {
   const ticks = Math.min(Math.max(Number(body?.ticks) || 3, 1), 5);
   const tokenDecimals = Number(process.env.UNLINK_TOKEN_DECIMALS ?? "6");
   const environment = process.env.UNLINK_ENVIRONMENT ?? "arc-testnet";
-  const apiKey = process.env.UNLINK_API_KEY;
 
   // The DeFi venues the agent allocates into (vault/swap/aave) — empty if unconfigured.
   const venues = registerDemoVenues();
@@ -49,34 +46,6 @@ export async function POST(request: Request): Promise<Response> {
       if (e.kind === "done") { agent = e.agent; continue; }
       yield e;
     }
-
-    // Private rail, best-effort: prove this run's private payments without breaking
-    // the demo if the pool is unfunded or the engine is unreachable.
-    if (apiKey) {
-      try {
-        const priv = await runPrivatePayments({
-          mnemonic: mnemonic!,
-          apiKey,
-          environment,
-          token: TOKEN,
-          rpcUrl: process.env.RPC_URL,
-          ticks,
-          tokenDecimals,
-          venues,
-        });
-        yield {
-          kind: "private",
-          payments: priv.payments,
-          sellersReceived: priv.sellersReceived,
-          withdrawals: priv.withdrawals,
-          defi: priv.defi,
-          explorerBase: priv.explorerBase,
-        };
-      } catch {
-        // private proof unavailable — leave it out, the rest of the demo stands
-      }
-    }
-
     yield { kind: "done", agent };
   }
 
